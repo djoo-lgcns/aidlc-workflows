@@ -65,6 +65,8 @@ const HOOKS = [
   "aidlc-state-transition-guard.ts",
   // Enforces the per-unit reviewer read-scope bound on PreToolUse.
   "aidlc-reviewer-scope.ts",
+  // Folds transcript token usage into the durable ledger on PostToolUse.
+  "aidlc-fold-usage.ts",
 ] as const;
 
 describe("t02 hook presence — shipped dist/claude/.claude/hooks (migrated from t02-hook-executability.sh, plan 10)", () => {
