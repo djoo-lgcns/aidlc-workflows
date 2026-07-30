@@ -13,7 +13,7 @@ commands a stage or conductor invokes directly.
 
 All event names follow `SUBJECT_PAST_VERB` — every event answers "what happened?"
 
-## Event Registry (74 events, 19 categories)
+## Event Registry (78 events, 20 categories)
 
 ### Workflow Lifecycle (4 events)
 
@@ -83,6 +83,20 @@ All event names follow `SUBJECT_PAST_VERB` — every event answers "what happene
 | `QUESTION_ANSWERED` | Non-gate question answered by user | Timestamp, Stage, Details | `tools/aidlc-log.ts answer` |
 | `REVIEW_REQUESTED` | Conductor dispatches the §12a reviewer sub-agent | Timestamp, Stage, Reviewer, optional Unit (per-unit stages), optional Iteration | `tools/aidlc-log.ts review` |
 | `REVIEW_COMPLETED` | Reviewer verdict read; gates the approval of a reviewer-bearing stage | Timestamp, Stage, Reviewer, Verdict, optional Unit (per-unit stages), optional Iteration | `tools/aidlc-log.ts review --verdict` |
+
+### Unit Lifecycle Events (4 events — inline per-unit Construction stages)
+
+The interactive twin of the swarm's `SWARM_UNIT_*` ledger. `UNIT_COMPLETED` is
+the completion receipt the engine's coverage walk prefers over bare artifact
+existence once any receipt exists for the stage; the emitting verb verifies
+the unit's required artifacts on disk before committing it.
+
+| Event | When | Required Fields | Emitter |
+|-------|------|-----------------|---------|
+| `UNIT_STARTED` | A unit's work begins on an inline per-unit stage; refused while another unit of the stage is open | Timestamp, Stage, Unit | `tools/aidlc-state.ts unit start` |
+| `UNIT_PAUSED` | A unit stops before completion; the checkpoint carries why and what comes next | Timestamp, Stage, Unit, Reason, Next Action | `tools/aidlc-state.ts unit pause` |
+| `UNIT_RESUMED` | The paused unit is explicitly resumed (the engine hard-stops until this) | Timestamp, Stage, Unit | `tools/aidlc-state.ts unit resume` |
+| `UNIT_COMPLETED` | The unit's work is done AND its required artifacts exist on disk (verified at emit) | Timestamp, Stage, Unit | `tools/aidlc-state.ts unit complete` |
 
 ### Artifact Events (3 events — hook-emitted)
 
