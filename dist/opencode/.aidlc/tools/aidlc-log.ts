@@ -15,6 +15,7 @@ import {
   humanActedSinceLastAnswer,
   humanPresenceGuardDisabled,
   isAutonomousMode,
+  isNonAnswer,
   parseCheckboxes,
   readAllAuditShards,
   resolveProjectDir,
@@ -180,6 +181,17 @@ function handleAnswer(args: string[]): void {
   const { flags } = parseFlags(args);
   if (!flags.stage) error("Missing --stage <slug>");
   if (!flags.details) error("Missing --details <text>");
+  // A cancelled/dismissed/auto-resolved question widget is not an answer.
+  // Some harnesses return a completed-looking object for a dismissed question
+  // (status=completed, answer "Cancelled") — recording it would mint a
+  // QUESTION_ANSWERED from a non-decision and consume the human's turn.
+  if (isNonAnswer(flags.details)) {
+    error(
+      `Refusing to record "${flags.details.trim() || "(empty)"}" as an answer: it is cancellation ` +
+        "boilerplate, not a human decision. If the user dismissed the question, re-present it and " +
+        "wait for a real answer; do not log the dismissal.",
+    );
+  }
 
   const pd = resolveActiveProjectDir(projectDir);
   const fields: Record<string, string> = {
