@@ -3,10 +3,10 @@ All notable changes to this project will be documented in this file.
 
 ## [2.5.34] - 2026-08-02
 
-Kiro CLI and Kiro IDE now treat the consolidated answer review as a mandatory, separate human checkpoint before artifact generation. This prevents guided and chat question flows from skipping directly to learnings or approval, and preserves the human's exact `Looks correct` choice instead of a bare file letter or chat number. **Upgrade:** re-copy `dist/kiro/` or `dist/kiro-ide/` into the project so the updated conductor skill and question-rendering annex are installed.
+Every harness now treats the consolidated answer review as a mandatory, separate human checkpoint before artifact generation. This prevents guided and chat question flows from skipping directly to artifact generation, learnings, or approval, and preserves the human's exact `Looks correct` choice instead of a bare file letter or chat number. **Upgrade:** re-copy the selected `dist/<harness>/` into the project so the updated conductor skill and question-rendering annex are installed.
 
-* The Kiro conductor skills now pin the pre-generation ordering explicitly: consolidated summary confirmation, artifact generation and review, learnings, then approval.
-* The Kiro numbered-prose annexes render **Looks correct / Request changes** as their own turn and require `[Answer]: Looks correct`; prefixed forms such as `[Answer]: A. Looks correct`, bare letters/numbers, and self-selected answers do not satisfy the checkpoint.
+* All five conductor skills now require consolidated summary confirmation before artifact generation in both workflow and isolated stage runs; workflow runs then proceed through review, learnings, and approval.
+* Each harness renders **Looks correct / Request changes** through its native question surface as a separate turn and requires `[Answer]: Looks correct`; prefixed forms such as `[Answer]: A. Looks correct`, bare letters/numbers, and self-selected answers do not satisfy the checkpoint.
 
 ## [2.5.33] - 2026-08-01
 
