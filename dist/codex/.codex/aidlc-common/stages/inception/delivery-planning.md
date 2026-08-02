@@ -87,19 +87,19 @@ This stage plans the Bolt sequence — the order in which Units of Work are exec
 
 Create `<record>/inception/delivery-planning/delivery-planning-questions.md` with questions. Strategic questions (one answer per project):
 
-- Which sequencing heuristic applies: risk-first, value-first, walking-skeleton-first, or hybrid? If hybrid, name which heuristics apply to which Bolts.
-- Is a WSJF-style scoring model used? If so, what weightings on risk, value, and job size?
-- What is Bolt granularity — one Unit per Bolt, bundled related Units per Bolt, or thin slices that span Units?
-- Can multiple Bolts run in parallel through Construction, or is the pipeline strictly sequential?
-- Are there external dependencies (APIs, data availability, approvals, external-team hand-offs)? For each gated item capture: owner, lead time, which Bolt it blocks, mitigation/workaround.
-- What are the key risk items that should be tackled earliest?
+- What should we build first: the riskiest parts, the most valuable parts, a thin end-to-end slice that proves the whole thing hangs together, or some mix? If a mix, say which approach applies where.
+- Should we score and rank the work with a formal model (WSJF-style: value and urgency against size)? If so, how much weight goes on risk, on value, and on size?
+- How big should one Bolt be: a single Unit of Work, several related Units bundled together, or thin slices that cut across Units?
+- Can several Bolts be built at the same time, or do they need to go one after another?
+- Is anything outside this team going to hold us up (APIs, data, approvals, another team's hand-off)? For each one, capture who owns it, how long it takes, which Bolt it blocks, and what we do if it slips.
+- What worries you most about this build, so we tackle it early?
 
 Per-Bolt questions (the aidlc-delivery-agent loops these during artifact generation, one set of answers per Bolt in the plan):
 
 - Which Units of Work does this Bolt bundle?
-- Is this Bolt the walking skeleton? If yes, which architectural layers does it prove?
-- What is the Definition of Done for this Bolt?
-- What is the confidence hypothesis for this Bolt — what will shipping it prove?
+- Is this Bolt the thin end-to-end slice (the walking skeleton)? If yes, which parts of the architecture does it prove out?
+- What has to be true for this Bolt to count as done?
+- What will shipping this Bolt tell us that we do not know yet?
 - Which mob owns this Bolt? (References teams from 1.5 when 1.5 ran; when 1.5 was SKIP — mvp, workshop — default to aidlc-developer-agent for all Bolts.)
 
 NOTE: Bolt sequencing is economic, not topological. Bolt order may deviate from 2.7's topological order when a risk-first or walking-skeleton-first argument justifies it. The deviation must be captured in `risk-and-sequencing-rationale.md`.
@@ -133,7 +133,7 @@ Run Inception → Construction verification check:
 
 Hand completion to `stage-protocol.md` via
 `bun .codex/tools/aidlc-orchestrate.ts report --stage delivery-planning --result <outcome>`.
-The engine owns all lifecycle transitions and advancement.
+That `report` call owns every lifecycle transition and advancement; never perform one in prose, and never narrate this bookkeeping to the user.
 
 **Construction iteration.** Classify how the approved `bolt-plan.md` wants the
 inline construction DESIGN stages (functional-design, nfr-requirements,

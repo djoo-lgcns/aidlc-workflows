@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.38] - 2026-08-02
+
+The assistant now talks like a teammate building your software instead of narrating its own machinery. Chat messages, approval gates, the composer's plan proposal, scope questions, error messages, and the onboarding doc were rewritten in plain developer terms; framework nouns (engine, directive, dispatch, conductor, harness, scope grid, steering, swarm) are reserved for internal instructions and no longer appear in what you read. No behavior changed: every step, approval gate, audit event, tool flag, and file path is identical, and the test suite that pins those mechanics is unchanged. **Upgrade:** re-copy your `dist/<harness>/` shell into the project to pick up the new prose.
+
+* A "Talking to the user" voice contract now lives in the stage protocol every harness loads on every stage, so all five distributions inherit one voice. It governs wording only and states explicitly that mechanics, verbatim tool output, and audit vocabulary are unchanged.
+* The composer's plan proposal leads with a plain-language recommendation ("this looks like a small, well-understood change, so I suggest a short run") and the stage list, then shows the scores under a "Scoring detail (advisory)" heading. The scores, bands, and `method` line still appear in full, just below the recommendation instead of as the headline.
+* Scope questions read plainly: a keyword match now asks "This looks like <name> work, so I'd run the <name> plan", and an unclear task says "None of the ready-made plans is an obvious fit" instead of "No stock scope clearly fits". The stage and gate counts and the `compose` affordance are unchanged.
+* Error and refusal messages lead with a plain first sentence and keep the exact remedial command: the steering-token family, the stale-position and changed-route cases, the transport-budget warning, and the two autonomy refusals (which no longer mention the swarm).
+* The onboarding doc (`CLAUDE.md` / `AGENTS.md`) opens with what AI-DLC does for you rather than a component inventory, and the sensors, tools, and hooks entries describe what they do in the reader's terms. `--help` wording for `compose`, `--new-scope`, and the auto-created workflow record is plainer.
+* Approval-gate and completion templates ask in plain words (what was produced, what to look at, what happens next), the depth and test-strategy note explains itself, and the Bolt-planning questions drop the jargon while keeping Bolt and Unit of Work.
+
 ## [2.5.33] - 2026-08-01
 
 Stage rules are now delivered deterministically instead of depending on the conductor choosing to read paths. The engine emits the active-space rule bundle as bounded `load-steering` directives before `run-stage`, and reviewer checklists are absorbed into reviewer agent bodies at build time - closing the observed skip where stages ran with none of their org/phase memory applied. **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the updated engine, skills, agents, and hooks are installed.
