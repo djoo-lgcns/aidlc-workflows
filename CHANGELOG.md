@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.34] - 2026-08-02
+
+Kiro CLI and Kiro IDE now treat the consolidated answer review as a mandatory, separate human checkpoint before artifact generation. This prevents guided and chat question flows from skipping directly to learnings or approval, and preserves the human's exact `Looks correct` choice instead of a bare file letter or chat number. **Upgrade:** re-copy `dist/kiro/` or `dist/kiro-ide/` into the project so the updated conductor skill and question-rendering annex are installed.
+
+* The Kiro conductor skills now pin the pre-generation ordering explicitly: consolidated summary confirmation, artifact generation and review, learnings, then approval.
+* The Kiro numbered-prose annexes render **Looks correct / Request changes** as their own turn and require `[Answer]: Looks correct`; prefixed forms such as `[Answer]: A. Looks correct`, bare letters/numbers, and self-selected answers do not satisfy the checkpoint.
+
 ## [2.5.33] - 2026-08-01
 
 Stage rules are now delivered deterministically instead of depending on the conductor choosing to read paths. The engine emits the active-space rule bundle as bounded `load-steering` directives before `run-stage`, and reviewer checklists are absorbed into reviewer agent bodies at build time - closing the observed skip where stages ran with none of their org/phase memory applied. **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the updated engine, skills, agents, and hooks are installed.
