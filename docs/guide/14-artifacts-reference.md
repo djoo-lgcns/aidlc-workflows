@@ -10,6 +10,11 @@ directory structure, per-artifact descriptions, lifecycle, and git policy.
 
 ## Directory Tree
 
+This is the complete set of places an artifact can land, not what a fresh record
+looks like. Intent creation makes one folder per phase your scope runs (plus
+`verification/`); the rest appear as work happens, and a per-stage folder is
+created the first time that stage writes.
+
 ```
 aidlc/spaces/<space>/intents/<YYMMDD>-<label>/   # one record dir per intent
   aidlc-state.md                    # Workflow state (commit)
