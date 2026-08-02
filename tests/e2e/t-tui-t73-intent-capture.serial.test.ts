@@ -280,14 +280,18 @@ describe("t-tui-t73-intent-capture (answering the stage gate produces artifacts 
               "--project-dir",
               sandbox,
               // Between the summary-confirmation menu and the learnings menu the
-              // conductor now writes both artifacts AND runs the §12a
-              // aidlc-product-lead-agent review as a subagent (~2.5-3 min
-              // observed) before anything repaints. The 200s budget predates the
-              // intent-capture reviewer (2.5.10) and starves a legitimate
-              // single-pass review; 420s covers one pass with headroom while the
-              // overall timeout stays the hard ceiling.
+              // conductor writes both artifacts AND runs the §12a
+              // aidlc-product-lead-agent review as a subagent before anything
+              // repaints. The 200s budget predated the intent-capture reviewer
+              // (2.5.10) and starved even a single pass. One observed pass runs
+              // 350-400s, and the protocol explicitly allows a NOT-READY ->
+              // fix -> re-review cycle (reviewer_max_iterations: 2) inside the
+              // same gate window - a live run completed iteration 2's terminal
+              // receipt 5.8s before a 420s cap fired. 900s covers the full
+              // two-pass cycle with headroom; the overall timeout stays the
+              // hard ceiling.
               "--per-gate-timeout-ms",
-              "420000",
+              "900000",
               "--overall-timeout-ms",
               String(Math.max(60000, TEST_TIMEOUT_MS - 30000)),
               // Terminate when the stage has completed + been approved: the approve
