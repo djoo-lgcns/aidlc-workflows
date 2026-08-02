@@ -292,8 +292,8 @@ dist/claude/.claude/
 +-- CLAUDE.md
 +-- settings.json
 +-- hooks/
-|   +-- aidlc-audit-logger.ts
-|   +-- aidlc-sync-statusline.ts
+|   +-- aidlc-write-audit-log.ts
+|   +-- aidlc-sync-workflow-state.ts
 |   +-- aidlc-validate-state.ts
 |   +-- aidlc-log-subagent.ts
 |   +-- aidlc-session-start.ts

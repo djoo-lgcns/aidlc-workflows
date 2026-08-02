@@ -253,7 +253,7 @@ function auditTailHasFields(
 // producesDirsForStage handles for the artifact guard. When the active intent
 // records repos, that segment must belong to the recorded set so a write to one
 // repo's durable codekb cannot revise an unrelated intent. The audit File field
-// is stored forward-slash-normalised (aidlc-audit-logger.ts), so the
+// is stored forward-slash-normalised (aidlc-write-audit-log.ts), so the
 // forward-slash matching is harness-neutral; we still normalise defensively in
 // case a caller passes a raw OS path.
 function producesArtifactFile(
@@ -572,10 +572,11 @@ export function main(argv: string[]): void {
     process.env.AIDLC_ALLOW_DIRECT_STATE_TRANSITIONS !== "1"
   ) {
     error(
-      `Direct aidlc-state.ts ${subcommand} is blocked: workflow lifecycle transitions are engine-owned. ` +
-        "Use aidlc-orchestrate.ts report --stage <slug> --result " +
+      `Direct aidlc-state.ts ${subcommand} is blocked: only the workflow engine may change a ` +
+        "stage's status, so that the state file, the audit log, and the compiled stage graph " +
+        "stay in agreement. Use aidlc-orchestrate.ts report --stage <slug> --result " +
         "<awaiting-approval|approved|rejected|revised|completed|skipped>; use " +
-        "aidlc-orchestrate.ts park to park, and next/jump for routing changes.",
+        "aidlc-orchestrate.ts park to pause the workflow, and next/jump to change routing.",
     );
   }
 

@@ -52,7 +52,7 @@ All event names follow `SUBJECT_PAST_VERB` — every event answers "what happene
 | `SESSION_RESUMED` | Existing Claude Code session resumed (source=resume) | Timestamp, Source | `hooks/aidlc-session-start.ts` |
 | `SESSION_COMPACTED` | Context compaction occurred | Timestamp, Current Stage, State Validity | `hooks/aidlc-validate-state.ts` (PreCompact) |
 | `SESSION_ENDED` | Claude Code session terminates | Timestamp, Reason | `hooks/aidlc-session-end.ts` |
-| `HUMAN_TURN` | A real human acted this turn: submitted a prompt or answered a question widget (the approval/interview gate requires one since the last gate resolution) | Timestamp | `hooks/aidlc-mint-presence.ts` (UserPromptSubmit + PostToolUse AskUserQuestion) + the per-harness prompt-submit adapters |
+| `HUMAN_TURN` | A real human acted this turn: submitted a prompt or answered a question widget (the approval/interview gate requires one since the last gate resolution) | Timestamp | `hooks/aidlc-record-human-turn.ts` (UserPromptSubmit + PostToolUse AskUserQuestion) + the per-harness prompt-submit adapters |
 
 ### Initialization Events (3 events — fire IN ADDITION TO `STAGE_COMPLETED`)
 
@@ -91,8 +91,8 @@ the active space's shared `codekb/<repo>/` tree.
 
 | Event | When | Required Fields | Emitter |
 |-------|------|-----------------|---------|
-| `ARTIFACT_CREATED` | New artifact written in the active intent record or space-level codekb tree | Timestamp, Tool, File, Context | `hooks/aidlc-audit-logger.ts` (PostToolUse; Write to net-new path) |
-| `ARTIFACT_UPDATED` | Existing artifact modified in either tree | Timestamp, Tool, File, Context | `hooks/aidlc-audit-logger.ts` (PostToolUse; Edit, or Write overwriting existing) |
+| `ARTIFACT_CREATED` | New artifact written in the active intent record or space-level codekb tree | Timestamp, Tool, File, Context | `hooks/aidlc-write-audit-log.ts` (PostToolUse; Write to net-new path) |
+| `ARTIFACT_UPDATED` | Existing artifact modified in either tree | Timestamp, Tool, File, Context | `hooks/aidlc-write-audit-log.ts` (PostToolUse; Edit, or Write overwriting existing) |
 | `ARTIFACT_REUSED` | Re-use decision on backward jump | Timestamp, Stage, Decision, Artifacts | `tools/aidlc-state.ts reuse-artifact` |
 
 ### Subagent Events (1 event — hook-emitted)

@@ -361,7 +361,7 @@ if (target === "verb-intercept") {
 // conductor may retry within the turn; the next turn bumps the counter so the latch
 // goes stale and a legitimate advancing next runs). Advisory/fail-open: any
 // parse/read failure exits 0 and never blocks a real next.
-if (target === "pretool-block") {
+if (target === "guard-tool-call") {
   const cmdStr = String(kiro.tool_input?.command ?? "");
   const cwd = projectDir;
   const m = cmdStr.match(/aidlc-orchestrate\.ts\s+next\b([^\n]*)/);
@@ -430,7 +430,7 @@ if (target === "pretool-block") {
 
   if (isBareAdvancing && counter >= 0 && latchTurn === counter) {
     process.stderr.write(
-      "read-only/navigation command already handled this turn by the deterministic harness — do not advance the workflow. The output was already relayed; end the turn.\n",
+      "This was a read-only command and AIDLC already ran it this turn: do not advance the workflow. Its output has already been shown to the user; end the turn.\n",
     );
     return 2; // Kiro reject contract: exit 2 + stderr BLOCKS the tool call.
   }
@@ -580,12 +580,12 @@ if (target === "reviewer-scope") {
 // (visible in the transcript and traces), never a block. The strict rewrite
 // path stays on the harnesses that support updatedInput (Claude, Codex,
 // opencode).
-if (target === "dispatch-rules") {
+if (target === "deliver-stage-rules") {
   if ((kiro.tool_name ?? "") !== "subagent") return 0;
   const executable = process.env.AIDLC_COMPILED_EXECUTABLE;
   const command = executable
     ? [executable, "hook", "dispatch-rules"]
-    : [process.execPath, join(HOOKS_DIR, "aidlc-dispatch-rules.ts")];
+    : [process.execPath, join(HOOKS_DIR, "aidlc-deliver-stage-rules.ts")];
   const r = Bun.spawnSync(command, {
     stdin: Buffer.from(input, "utf-8"),
     cwd: projectDir,
@@ -668,10 +668,10 @@ function buildForward(): Forward {
       };
     }
 
-    case "runtime-compile": {
+    case "rebuild-stage-graph": {
       if (tool !== "Bash") return null;
       return {
-        hook: "aidlc-runtime-compile.ts",
+        hook: "aidlc-rebuild-stage-graph.ts",
         input: {
           hook_event_name: "PostToolUse",
           tool_name: "Bash",
@@ -680,7 +680,7 @@ function buildForward(): Forward {
       };
     }
 
-    case "state-sync": {
+    case "sync-workflow-state": {
       // Kiro's todo_list is command-shaped. A `create` whose first task
       // description carries the stage-protocol "[slug]" suffix maps to the
       // Claude TaskUpdate in_progress transition the core hook keys on.
@@ -690,7 +690,7 @@ function buildForward(): Forward {
       const desc = tasks[0]?.task_description ?? "";
       if (!desc) return null;
       return {
-        hook: "aidlc-sync-statusline.ts",
+        hook: "aidlc-sync-workflow-state.ts",
         input: {
           hook_event_name: "PostToolUse",
           tool_name: "TaskUpdate",
@@ -713,7 +713,7 @@ function buildForward(): Forward {
       };
     }
 
-    case "stop":
+    case "continue-workflow":
       // Kiro provides neither stop_hook_active NOR a transcript_path, so the
       // core hook's run-mode-aware no-progress ceiling is the loop guard here
       // (it defaults stop_hook_active to false). With no transcript the core
@@ -722,7 +722,7 @@ function buildForward(): Forward {
       // autonomous Construction) instead, after one nudge rather than eight. The
       // {"decision":"block"} stdout contract is identical.
       return {
-        hook: "aidlc-stop.ts",
+        hook: "aidlc-continue-workflow.ts",
         input: { hook_event_name: "Stop", stop_hook_active: false },
       };
 
@@ -756,8 +756,8 @@ if (fwd === null) {
 if (fwd.hook === "__audit_and_sensors__") {
   // Two core hooks ride the same write event, in audit-then-sensors order
   // (mirrors the Claude settings.json registration). Both advisory: exit 0.
-  runCore("aidlc-audit-logger.ts", fwd.input);
-  runCore("aidlc-sensor-fire.ts", fwd.input);
+  runCore("aidlc-write-audit-log.ts", fwd.input);
+  runCore("aidlc-run-sensors.ts", fwd.input);
   return 0;
 }
 

@@ -1163,7 +1163,7 @@ function handleDoctor(projectDir: string, flags: Record<string, string> = {}): v
       const raw = readFileSync(settingsForHooks, "utf-8");
       // jq-free: collect every distinct aidlc-*.ts basename referenced anywhere
       // in settings.json (hook command paths like
-      // "bun $CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-audit-logger.ts" and the
+      // "bun $CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-write-audit-log.ts" and the
       // statusLine command). Basename, not path, so the probe is dir-relative.
       const refs = new Set<string>();
       for (const m of raw.matchAll(/aidlc-[A-Za-z0-9_-]+\.ts/g)) {
@@ -1205,8 +1205,8 @@ function handleDoctor(projectDir: string, flags: Record<string, string> = {}): v
     // agents/aidlc.json / hooks.json — checked below). The core hook bodies
     // ship in every tree plus an authored adapter, so probe the explicit roster.
     const tsHooks = [
-      "aidlc-audit-logger",
-      "aidlc-sync-statusline",
+      "aidlc-write-audit-log",
+      "aidlc-sync-workflow-state",
       "aidlc-validate-state",
       "aidlc-log-subagent",
       "aidlc-session-start",

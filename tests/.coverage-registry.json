@@ -3269,27 +3269,35 @@
     },
     {
       "unitClass": "hook",
-      "unitId": "aidlc-audit-logger",
+      "unitId": "aidlc-continue-workflow",
       "minMechanism": "none",
       "coveredBy": [
+        {
+          "file": "tests/e2e/t122-stop-hook-e2e.test.ts",
+          "mechanism": "sdk"
+        },
+        {
+          "file": "tests/integration/t121-stop-hook-enforce.test.ts",
+          "mechanism": "cli"
+        },
         {
           "file": "tests/integration/t131-hooks-settings-fire.test.ts",
           "mechanism": "cli"
         },
         {
-          "file": "tests/integration/t33-hook-concurrency.test.ts",
+          "file": "tests/integration/t187-park-conversational.sdk.test.ts",
+          "mechanism": "sdk"
+        },
+        {
+          "file": "tests/integration/t195-stop-hook-compose-carveout.test.ts",
           "mechanism": "cli"
         },
         {
-          "file": "tests/unit/t07-hook-audit-logger.test.ts",
-          "mechanism": "cli"
+          "file": "tests/unit/t226-detector-corpus.test.ts",
+          "mechanism": "none"
         },
         {
-          "file": "tests/unit/t13-hook-input-robustness.test.ts",
-          "mechanism": "cli"
-        },
-        {
-          "file": "tests/unit/t170-audit-logger-per-intent.test.ts",
+          "file": "tests/unit/t228-hook-run-exports.test.ts",
           "mechanism": "cli"
         }
       ],
@@ -3297,7 +3305,7 @@
     },
     {
       "unitClass": "hook",
-      "unitId": "aidlc-dispatch-rules",
+      "unitId": "aidlc-deliver-stage-rules",
       "minMechanism": "none",
       "coveredBy": [
         {
@@ -3333,31 +3341,7 @@
     },
     {
       "unitClass": "hook",
-      "unitId": "aidlc-mint-presence",
-      "minMechanism": "none",
-      "coveredBy": [
-        {
-          "file": "tests/unit/t228-hook-run-exports.test.ts",
-          "mechanism": "cli"
-        }
-      ],
-      "status": "covered"
-    },
-    {
-      "unitClass": "hook",
-      "unitId": "aidlc-reviewer-scope",
-      "minMechanism": "none",
-      "coveredBy": [
-        {
-          "file": "tests/unit/t221-reviewer-scope-hook.test.ts",
-          "mechanism": "cli"
-        }
-      ],
-      "status": "covered"
-    },
-    {
-      "unitClass": "hook",
-      "unitId": "aidlc-runtime-compile",
+      "unitId": "aidlc-rebuild-stage-graph",
       "minMechanism": "none",
       "coveredBy": [
         {
@@ -3385,7 +3369,31 @@
     },
     {
       "unitClass": "hook",
-      "unitId": "aidlc-sensor-fire",
+      "unitId": "aidlc-record-human-turn",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/unit/t228-hook-run-exports.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "hook",
+      "unitId": "aidlc-reviewer-scope",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/unit/t221-reviewer-scope-hook.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "hook",
+      "unitId": "aidlc-run-sensors",
       "minMechanism": "none",
       "coveredBy": [
         {
@@ -3505,43 +3513,7 @@
     },
     {
       "unitClass": "hook",
-      "unitId": "aidlc-stop",
-      "minMechanism": "none",
-      "coveredBy": [
-        {
-          "file": "tests/e2e/t122-stop-hook-e2e.test.ts",
-          "mechanism": "sdk"
-        },
-        {
-          "file": "tests/integration/t121-stop-hook-enforce.test.ts",
-          "mechanism": "cli"
-        },
-        {
-          "file": "tests/integration/t131-hooks-settings-fire.test.ts",
-          "mechanism": "cli"
-        },
-        {
-          "file": "tests/integration/t187-park-conversational.sdk.test.ts",
-          "mechanism": "sdk"
-        },
-        {
-          "file": "tests/integration/t195-stop-hook-compose-carveout.test.ts",
-          "mechanism": "cli"
-        },
-        {
-          "file": "tests/unit/t226-detector-corpus.test.ts",
-          "mechanism": "none"
-        },
-        {
-          "file": "tests/unit/t228-hook-run-exports.test.ts",
-          "mechanism": "cli"
-        }
-      ],
-      "status": "covered"
-    },
-    {
-      "unitClass": "hook",
-      "unitId": "aidlc-sync-statusline",
+      "unitId": "aidlc-sync-workflow-state",
       "minMechanism": "none",
       "coveredBy": [
         {
@@ -3574,6 +3546,34 @@
         },
         {
           "file": "tests/unit/t230-dispatcher-routes.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "hook",
+      "unitId": "aidlc-write-audit-log",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/integration/t131-hooks-settings-fire.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/integration/t33-hook-concurrency.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/unit/t07-hook-audit-logger.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/unit/t13-hook-input-robustness.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/unit/t170-audit-logger-per-intent.test.ts",
           "mechanism": "cli"
         }
       ],

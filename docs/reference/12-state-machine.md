@@ -289,8 +289,8 @@ Session hooks check for the active intent's `aidlc-state.md` (under `aidlc/space
 
 | Event | Emitter | Notes |
 |---|---|---|
-| `ARTIFACT_CREATED` | `hooks/aidlc-audit-logger.ts` | Write to net-new path — distinguished from UPDATED via `mtimeMs == birthtimeMs` stat check |
-| `ARTIFACT_UPDATED` | `hooks/aidlc-audit-logger.ts` | Edit tool or Write overwriting existing file |
+| `ARTIFACT_CREATED` | `hooks/aidlc-write-audit-log.ts` | Write to net-new path — distinguished from UPDATED via `mtimeMs == birthtimeMs` stat check |
+| `ARTIFACT_UPDATED` | `hooks/aidlc-write-audit-log.ts` | Edit tool or Write overwriting existing file |
 | `ARTIFACT_REUSED` | `tools/aidlc-state.ts` | `reuse-artifact` subcommand — keep/modify/redo decisions |
 
 ### Construction Bolts
@@ -310,7 +310,7 @@ Session hooks check for the active intent's `aidlc-state.md` (under `aidlc/space
 | `SESSION_RESUMED` | `hooks/aidlc-session-start.ts` | `source=resume` |
 | `SESSION_COMPACTED` | `hooks/aidlc-validate-state.ts` | Emitted at PreCompact (not at next SessionStart) to avoid duplication |
 | `SESSION_ENDED` | `hooks/aidlc-session-end.ts` | Includes `Reason` field from Claude Code |
-| `HUMAN_TURN` | `hooks/aidlc-mint-presence.ts` (+ per-harness prompt-submit adapters) | One per real human prompt or answered question widget; the approval/interview gate requires one since the last gate resolution |
+| `HUMAN_TURN` | `hooks/aidlc-record-human-turn.ts` (+ per-harness prompt-submit adapters) | One per real human prompt or answered question widget; the approval/interview gate requires one since the last gate resolution |
 | `SUBAGENT_COMPLETED` | `hooks/aidlc-log-subagent.ts` | Records subagent completion via SubagentStop hook |
 | `REVIEWER_SCOPE_BLOCKED` | `hooks/aidlc-reviewer-scope.ts` | A per-unit reviewer's tool call refused for reaching into sibling units' `construction/` paths (the §12a read-scope bound); one row per refusal |
 

@@ -42,7 +42,7 @@
 //   tools/aidlc-state.ts handleApprove (backstop block), unrecordedRevisionSinceGateOpen,
 //     producesArtifactFile;
 //   tools/aidlc-orchestrate.ts handleReport (production approval dispatcher);
-//   hooks/aidlc-audit-logger.ts (emits ARTIFACT_UPDATED with the production File shape);
+//   hooks/aidlc-write-audit-log.ts (emits ARTIFACT_UPDATED with the production File shape);
 //   tools/aidlc-audit.ts append (records the HUMAN_TURN event).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -68,7 +68,7 @@ const STATE = join(AIDLC_SRC, "tools", "aidlc-state.ts");
 const ORCHESTRATE = join(AIDLC_SRC, "tools", "aidlc-orchestrate.ts");
 const AUDIT = join(AIDLC_SRC, "tools", "aidlc-audit.ts");
 const LOG = join(AIDLC_SRC, "tools", "aidlc-log.ts");
-const HOOK = join(AIDLC_SRC, "hooks", "aidlc-audit-logger.ts");
+const HOOK = join(AIDLC_SRC, "hooks", "aidlc-write-audit-log.ts");
 const MID_IDEATION = "state-mid-ideation.md"; // Current Stage: feasibility ([-])
 // feasibility declares produces: feasibility-assessment, constraint-register, ...
 const PRIMARY_ARTIFACT = "feasibility-assessment";
@@ -163,7 +163,7 @@ function recordReview(proj: string, slug: string, iteration: number): void {
 }
 
 // Fire the real audit-logger hook with an Edit PostToolUse over stdin (Edit
-// always emits ARTIFACT_UPDATED - aidlc-audit-logger.ts). The File is an
+// always emits ARTIFACT_UPDATED - aidlc-write-audit-log.ts). The File is an
 // absolute path under the active-intent record, matching production. The shard
 // must already exist (the hook never auto-creates the trail), so a prior audit
 // event (gate-start or a HUMAN_TURN append) must have run first.

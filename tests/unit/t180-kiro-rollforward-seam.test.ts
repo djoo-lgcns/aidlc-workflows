@@ -264,7 +264,7 @@ describe("t180 pretool-block roll-forward backstop (exit-code contract)", () => 
     const dir = scratchProject();
     try {
       seedClock(dir, 3, 3);
-      const r = runAdapter(dir, "pretool-block", { tool_input: { command: BARE_NEXT }, cwd: dir });
+      const r = runAdapter(dir, "guard-tool-call", { tool_input: { command: BARE_NEXT }, cwd: dir });
       expect(r.code).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -275,7 +275,7 @@ describe("t180 pretool-block roll-forward backstop (exit-code contract)", () => 
     const dir = scratchProject();
     try {
       seedClock(dir, 3, 3);
-      const r = runAdapter(dir, "pretool-block", {
+      const r = runAdapter(dir, "guard-tool-call", {
         tool_input: { command: `${BARE_NEXT} --stage foo` },
         cwd: dir,
       });
@@ -289,7 +289,7 @@ describe("t180 pretool-block roll-forward backstop (exit-code contract)", () => 
     const dir = scratchProject();
     try {
       seedClock(dir, 3, 2);
-      const r = runAdapter(dir, "pretool-block", { tool_input: { command: BARE_NEXT }, cwd: dir });
+      const r = runAdapter(dir, "guard-tool-call", { tool_input: { command: BARE_NEXT }, cwd: dir });
       expect(r.code).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -300,7 +300,7 @@ describe("t180 pretool-block roll-forward backstop (exit-code contract)", () => 
     const dir = scratchProject();
     try {
       // aidlc/ exists but no counter and no latch were ever written.
-      const r = runAdapter(dir, "pretool-block", { tool_input: { command: BARE_NEXT }, cwd: dir });
+      const r = runAdapter(dir, "guard-tool-call", { tool_input: { command: BARE_NEXT }, cwd: dir });
       expect(r.code).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -316,7 +316,7 @@ describe("t180 pretool-block roll-forward backstop (exit-code contract)", () => 
         '--scope feature "build auth across both repos"',
         ["--scope", "feature", "build auth across both repos"],
       );
-      const r = runAdapter(dir, "pretool-block", {
+      const r = runAdapter(dir, "guard-tool-call", {
         tool_input: { command: BARE_NEXT },
         cwd: dir,
       });
@@ -337,7 +337,7 @@ describe("t180 pretool-block roll-forward backstop (exit-code contract)", () => 
         raw,
         ["--scope", "feature", "build auth across both repos"],
       );
-      const r = runAdapter(dir, "pretool-block", {
+      const r = runAdapter(dir, "guard-tool-call", {
         tool_input: { command: `${BARE_NEXT} ${raw}` },
         cwd: dir,
       });
@@ -359,7 +359,7 @@ describe("t180 pretool-block roll-forward backstop (exit-code contract)", () => 
         raw,
         ["--scope", "poc", "answer the question; continue without waiting"],
       );
-      const r = runAdapter(dir, "pretool-block", {
+      const r = runAdapter(dir, "guard-tool-call", {
         tool_input: {
           command:
             `${BARE_NEXT} --scope poc answer\\ the\\ question\\;\\ continue\\ without\\ waiting`,

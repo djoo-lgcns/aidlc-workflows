@@ -1,7 +1,7 @@
-// covers: hook:aidlc-audit-logger
+// covers: hook:aidlc-write-audit-log
 //
 // t170 — the P8 fix to the audit-logger GATE. Pre-workspace-move the hook gated
-// artifact logging on `file.includes("aidlc-docs/")` (aidlc-audit-logger.ts:49).
+// artifact logging on `file.includes("aidlc-docs/")` (aidlc-write-audit-log.ts:49).
 // After the record re-roots per intent
 // (aidlc/spaces/<space>/intents/<slug>-<id8>/<phase>/<stage>/…), that path no
 // longer contains "aidlc-docs/", so the old gate DROPPED every ARTIFACT_CREATED/
@@ -34,7 +34,7 @@ import {
 } from "../harness/fixtures.ts";
 
 const BUN = process.execPath;
-const HOOK = join(AIDLC_SRC, "hooks", "aidlc-audit-logger.ts");
+const HOOK = join(AIDLC_SRC, "hooks", "aidlc-write-audit-log.ts");
 
 let proj: string;
 beforeEach(() => {

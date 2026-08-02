@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-dispatch-rules.ts\""
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-deliver-stage-rules.ts\""
           }
         ]
       },
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-mint-presence.ts\""
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-record-human-turn.ts\""
           }
         ]
       }
@@ -94,11 +94,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-audit-logger.ts\""
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-write-audit-log.ts\""
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-sensor-fire.ts\""
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-run-sensors.ts\""
           }
         ]
       },
@@ -107,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-sync-statusline.ts\""
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-sync-workflow-state.ts\""
           }
         ]
       },
@@ -116,7 +116,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-mint-presence.ts\""
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-record-human-turn.ts\""
           }
         ]
       },
@@ -125,7 +125,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-runtime-compile.ts\""
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-rebuild-stage-graph.ts\""
           }
         ]
       }
@@ -158,7 +158,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-stop.ts\""
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-continue-workflow.ts\""
           }
         ]
       }

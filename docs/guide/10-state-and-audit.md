@@ -90,7 +90,7 @@ Events are organized into 19 categories:
 | **Initialization** | 3 | `WORKSPACE_SCAFFOLDED`, `WORKSPACE_SCANNED`, `WORKSPACE_INITIALISED` |
 | **Navigation** | 6 | `SCOPE_CHANGED`, `SCOPE_DETECTED`, `DEPTH_CHANGED`, `TEST_STRATEGY_CHANGED`, `RECOMPOSED`, `PLUGIN_SELECTION_CHANGED` |
 | **Interaction** | 6 | `DECISION_RECORDED`, `GATE_APPROVED`, `GATE_REJECTED`, `QUESTION_ANSWERED`, `REVIEW_REQUESTED`, `REVIEW_COMPLETED` |
-| **Artifact** | 3 | `ARTIFACT_CREATED`, `ARTIFACT_UPDATED` (audit-logger hook), `ARTIFACT_REUSED` |
+| **Artifact** | 3 | `ARTIFACT_CREATED`, `ARTIFACT_UPDATED` (write-audit-log hook), `ARTIFACT_REUSED` |
 | **Subagent** | 1 | `SUBAGENT_COMPLETED` (log-subagent hook) |
 | **Reviewer Scope** | 1 | `REVIEWER_SCOPE_BLOCKED` (reviewer-scope hook) |
 | **Utility** | 1 | `HEALTH_CHECKED` |
@@ -106,7 +106,7 @@ Events are organized into 19 categories:
 ### What gets logged and when
 
 - **Every stage start and completion** is logged with `STAGE_STARTED` and `STAGE_COMPLETED` events
-- **Every file write** to the intent's record dir (except the `audit/` shards themselves) is automatically logged by the audit-logger hook
+- **Every file write** to the intent's record dir (except the `audit/` shards themselves) is automatically logged by the write-audit-log hook
 - **Every approval gate decision** (approve, request changes, accept-as-is) is logged
 - **Every question answer** you provide is recorded
 - **Every subagent completion** is logged by the log-subagent hook

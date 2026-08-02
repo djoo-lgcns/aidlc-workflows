@@ -551,7 +551,7 @@ outputs: none
   // command string is opaque to the compiler), but at fire time the PostToolUse
   // sensor-fire hook spawns the dispatcher, the dispatcher exits non-zero, and
   // the hook records a hook-drop AND STILL exits 0 — the advisory exit-0
-  // contract (aidlc-sensor-fire.ts G5 :268; recordHookDrop :250-256). A broken
+  // contract (aidlc-run-sensors.ts G5 :268; recordHookDrop :250-256). A broken
   // sensor must never block the workflow; it must surface as an advisory drop.
   //
   // Proven by invoking the REAL hook with a real PostToolUse payload over a
@@ -592,7 +592,7 @@ outputs: none
       });
       const hook = spawnSync(
         "bun",
-        [join(proj, ".claude", "hooks", "aidlc-sensor-fire.ts")],
+        [join(proj, ".claude", "hooks", "aidlc-run-sensors.ts")],
         { cwd: proj, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, input: payload },
       );
 

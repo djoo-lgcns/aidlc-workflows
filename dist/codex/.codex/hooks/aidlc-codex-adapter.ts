@@ -335,15 +335,15 @@ switch (target) {
           tool_name: f.tool,
           tool_input: { file_path: f.path },
         });
-        runCore("aidlc-audit-logger.ts", fwd);
-        runCore("aidlc-sensor-fire.ts", fwd);
+        runCore("aidlc-write-audit-log.ts", fwd);
+        runCore("aidlc-run-sensors.ts", fwd);
       }
     }
     persistResponse("", 0);
     return 0;
   }
 
-  case "state-sync": {
+  case "sync-workflow-state": {
     // update_plan → the first in_progress step maps to the TaskUpdate
     // in_progress transition; the core hook extracts the "[slug]" suffix.
     if ((codex.tool_name ?? "") === "update_plan") {
@@ -355,17 +355,17 @@ switch (target) {
           tool_name: "TaskUpdate",
           tool_input: { status: "in_progress", activeForm: active.step },
         });
-        runCore("aidlc-sync-statusline.ts", fwd);
+        runCore("aidlc-sync-workflow-state.ts", fwd);
       }
     }
     persistResponse("", 0);
     return 0;
   }
 
-  case "runtime-compile": {
+  case "rebuild-stage-graph": {
     // Codex already names the shell tool "Bash" with tool_input.command —
     // the core hook's exact contract. Verbatim pipe.
-    runCore("aidlc-runtime-compile.ts", rawInput);
+    runCore("aidlc-rebuild-stage-graph.ts", rawInput);
     persistResponse("", 0);
     return 0;
   }
@@ -386,10 +386,10 @@ switch (target) {
     return 0;
   }
 
-  case "stop": {
+  case "continue-workflow": {
     // Contract identical on Codex (stop_hook_active included): pass stdin
     // verbatim, forward {"decision":"block","reason"} stdout + exit code.
-    const r = runCore("aidlc-stop.ts", rawInput);
+    const r = runCore("aidlc-continue-workflow.ts", rawInput);
     persistResponse(r.stdout, r.code);
     if (r.stdout) process.stdout.write(r.stdout);
     return r.code;
@@ -453,11 +453,11 @@ switch (target) {
     return 0;
   }
 
-  case "dispatch-rules": {
+  case "deliver-stage-rules": {
     // Codex 0.145 consumes the same PreToolUse hookSpecificOutput.updatedInput
     // contract as Claude. The core hook recognizes spawn_agent and appends the
     // exact active-stage bundle to message/items without adapter re-shaping.
-    const r = runCoreWithStderr("aidlc-dispatch-rules.ts", rawInput);
+    const r = runCoreWithStderr("aidlc-deliver-stage-rules.ts", rawInput);
     const answeredCode = r.code === 2 ? 2 : 0;
     persistResponse(r.stdout, answeredCode, r.stderr);
     if (r.stdout) process.stdout.write(r.stdout);
@@ -484,7 +484,7 @@ switch (target) {
     break;
   }
 
-  case "mint": {
+  case "record-human-turn": {
     // UserPromptSubmit: a real human acted this turn — record a HUMAN_TURN event
     // in the active intent's audit shard (human-presence gate). Gated on workflow
     // state existing (same self-gate as the core mint hook) so a prompt in a

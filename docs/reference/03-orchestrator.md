@@ -722,9 +722,9 @@ Complete reference of all 32 stages with execution metadata. The welcome message
 
 ## Appendix B: Hook Reference
 
-The framework hooks are registered project-wide in `settings.json` (the v0.6.0 hooks-move; they self-gate when no workflow is active). Three of them are detailed below. The rest, including `aidlc-sensor-fire.ts`, `aidlc-sync-statusline.ts`, and `aidlc-runtime-compile.ts`, are covered in [Hooks and Tools](06-hooks-and-tools.md), which carries the authoritative hook list and full source-level documentation for all of them.
+The framework hooks are registered project-wide in `settings.json` (the v0.6.0 hooks-move; they self-gate when no workflow is active). Three of them are detailed below. The rest, including `aidlc-run-sensors.ts`, `aidlc-sync-workflow-state.ts`, and `aidlc-rebuild-stage-graph.ts`, are covered in [Hooks and Tools](06-hooks-and-tools.md), which carries the authoritative hook list and full source-level documentation for all of them.
 
-### PostToolUse: audit-logger.ts
+### PostToolUse: aidlc-write-audit-log.ts
 
 - **Matcher**: `Write|Edit`
 - **Trigger**: Every Write or Edit Claude Code tool call during the skill session.

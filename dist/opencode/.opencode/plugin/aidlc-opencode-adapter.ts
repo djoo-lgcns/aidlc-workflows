@@ -11,14 +11,14 @@
 //   opencode moment                      → core hook (Claude event it mirrors)
 //   ------------------------------------------------------------------------
 //   chat.message (first per session)     → aidlc-session-start.ts  (SessionStart)
-//   chat.message (every human turn)      → aidlc-mint-presence.ts  (UserPromptSubmit)
-//   tool.execute.before task             → aidlc-dispatch-rules.ts (PreToolUse rewrite)
+//   chat.message (every human turn)      → aidlc-record-human-turn.ts  (UserPromptSubmit)
+//   tool.execute.before task             → aidlc-deliver-stage-rules.ts (PreToolUse rewrite)
 //   tool.execute.before other tools      → entrypoint boundary + aidlc-reviewer-scope.ts (PreToolUse)
-//   tool.execute.after write|edit|patch  → aidlc-audit-logger.ts + aidlc-sensor-fire.ts (PostToolUse Write|Edit)
-//   tool.execute.after bash              → aidlc-runtime-compile.ts (PostToolUse Bash)
-//   tool.execute.after todowrite         → aidlc-sync-statusline.ts (PostToolUse TaskUpdate)
+//   tool.execute.after write|edit|patch  → aidlc-write-audit-log.ts + aidlc-run-sensors.ts (PostToolUse Write|Edit)
+//   tool.execute.after bash              → aidlc-rebuild-stage-graph.ts (PostToolUse Bash)
+//   tool.execute.after todowrite         → aidlc-sync-workflow-state.ts (PostToolUse TaskUpdate)
 //   tool.execute.after task              → aidlc-log-subagent.ts    (SubagentStop)
-//   event session.idle                   → aidlc-stop.ts            (Stop)
+//   event session.idle                   → aidlc-continue-workflow.ts            (Stop)
 //   experimental.session.compacting      → aidlc-validate-state.ts  (PreCompact)
 //
 // Stop enforcement: session.idle is a REACTIVE event (opencode has no blocking
@@ -119,20 +119,20 @@ const AIDLC_ENTRYPOINT = /^\.aidlc\/(tools|hooks)\/([A-Za-z0-9][A-Za-z0-9._-]*\.
 // host's coarse bash permission glob matches it.
 const shippedAidlcEntrypoints: ReadonlySet<string> = new Set<string>(
   /* @aidlc-shipped-entrypoints@ */ [
-    "hooks/aidlc-audit-logger.ts",
-    "hooks/aidlc-dispatch-rules.ts",
+    "hooks/aidlc-continue-workflow.ts",
+    "hooks/aidlc-deliver-stage-rules.ts",
     "hooks/aidlc-log-subagent.ts",
-    "hooks/aidlc-mint-presence.ts",
+    "hooks/aidlc-rebuild-stage-graph.ts",
+    "hooks/aidlc-record-human-turn.ts",
     "hooks/aidlc-reviewer-scope.ts",
-    "hooks/aidlc-runtime-compile.ts",
-    "hooks/aidlc-sensor-fire.ts",
+    "hooks/aidlc-run-sensors.ts",
     "hooks/aidlc-session-end.ts",
     "hooks/aidlc-session-start.ts",
     "hooks/aidlc-state-transition-guard.ts",
     "hooks/aidlc-statusline.ts",
-    "hooks/aidlc-stop.ts",
-    "hooks/aidlc-sync-statusline.ts",
+    "hooks/aidlc-sync-workflow-state.ts",
     "hooks/aidlc-validate-state.ts",
+    "hooks/aidlc-write-audit-log.ts",
     "tools/aidlc-audit.ts",
     "tools/aidlc-bolt.ts",
     "tools/aidlc-directive.ts",
@@ -398,7 +398,7 @@ export default async ({
         // Retry on later human turns until an active workflow is available.
         if (sessionStartHandled(result.stdout)) started.add(input.sessionID);
       }
-      await runCore("aidlc-mint-presence.ts", { hook_event_name: "UserPromptSubmit" }, directory);
+      await runCore("aidlc-record-human-turn.ts", { hook_event_name: "UserPromptSubmit" }, directory);
     },
 
     "tool.execute.before": async (
@@ -408,7 +408,7 @@ export default async ({
       const args = output.args ?? {};
       if (input.tool === "task") {
         const dispatch = await runCore(
-          "aidlc-dispatch-rules.ts",
+          "aidlc-deliver-stage-rules.ts",
           {
             hook_event_name: "PreToolUse",
             tool_name: "task",
@@ -461,7 +461,7 @@ export default async ({
         if (guard.code === 2) {
           throw new Error(
             guard.stderr.trim() ||
-              "direct aidlc-state.ts lifecycle transitions are engine-owned",
+              "only the workflow engine may change a stage's status: use aidlc-orchestrate.ts report instead of calling aidlc-state.ts directly",
           );
         }
       }
@@ -517,8 +517,8 @@ export default async ({
             tool_input: { file_path: absolutePath },
           };
           // audit THEN sensors, mirroring the Claude settings.json order.
-          await runCore("aidlc-audit-logger.ts", payload, directory);
-          await runCore("aidlc-sensor-fire.ts", payload, directory);
+          await runCore("aidlc-write-audit-log.ts", payload, directory);
+          await runCore("aidlc-run-sensors.ts", payload, directory);
         }
         return;
       }
@@ -528,7 +528,7 @@ export default async ({
           tool_name: "Bash",
           tool_input: { command: (args.command as string) ?? "" },
         };
-        await runCore("aidlc-runtime-compile.ts", payload, directory);
+        await runCore("aidlc-rebuild-stage-graph.ts", payload, directory);
         return;
       }
       if (tool === "todowrite") {
@@ -538,7 +538,7 @@ export default async ({
         const active = todos.find((t) => t.status === "in_progress");
         if (!active?.content) return;
         await runCore(
-          "aidlc-sync-statusline.ts",
+          "aidlc-sync-workflow-state.ts",
           {
             hook_event_name: "PostToolUse",
             tool_name: "TaskUpdate",
@@ -582,7 +582,7 @@ export default async ({
       let nudgeReason: string | null = null;
       try {
         const res = await runCore(
-          "aidlc-stop.ts",
+          "aidlc-continue-workflow.ts",
           { hook_event_name: "Stop", stop_hook_active: false },
           directory,
         );

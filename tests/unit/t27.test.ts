@@ -28,7 +28,7 @@
 //   - .sh T6-T8   status shows IDEATION / Feasibility / feature  -> Test 6-8.
 //   - .sh T9      status md5 unchanged                            -> Test 9:
 //       byte-for-byte readFileSync before/after equality (STRONGER than md5).
-//   - .sh T10-T12 doctor mentions aidlc-statusline / audit-logger / settings
+//   - .sh T10-T12 doctor mentions aidlc-statusline / write-audit-log / settings
 //       -> Test 10-12 (same observable; absorbs the non-zero exit like || true).
 //   - .sh T13     doctor appends to audit.md (size grows)         -> Test 13:
 //       byte-length grows (same) + HEALTH_CHECKED count === 1 (STRONGER).
@@ -431,13 +431,13 @@ describe("t27 aidlc-utility status", () => {
 // ============================================================
 
 describe("t27 aidlc-utility doctor", () => {
-  test("10-12: doctor mentions aidlc-statusline, audit-logger, settings", () => {
+  test("10-12: doctor mentions aidlc-statusline, write-audit-log, settings", () => {
     // Hook rows now derive from settings.json's wired hooks (the contract), so
     // the project needs a real .claude/ for those labels to render.
     const p = installedProj();
     const r = util(["doctor"], p);
     expect(r.stdout).toContain("aidlc-statusline");
-    expect(r.stdout).toContain("audit-logger");
+    expect(r.stdout).toContain("write-audit-log");
     expect(r.stdout).toContain("settings");
   });
 
@@ -482,16 +482,16 @@ describe("t27 aidlc-utility doctor", () => {
     const p = installedProj();
     const r = util(["doctor"], p);
     for (const hook of [
-      "aidlc-audit-logger",
-      "aidlc-sync-statusline",
+      "aidlc-write-audit-log",
+      "aidlc-sync-workflow-state",
       "aidlc-validate-state",
       "aidlc-log-subagent",
       "aidlc-session-start",
       "aidlc-session-end",
       "aidlc-statusline",
-      "aidlc-runtime-compile", // previously missing
-      "aidlc-sensor-fire", // previously missing
-      "aidlc-stop", // previously missing (the flow-altering Stop hook)
+      "aidlc-rebuild-stage-graph", // previously missing
+      "aidlc-run-sensors", // previously missing
+      "aidlc-continue-workflow", // previously missing (the flow-altering Stop hook)
     ]) {
       // A wired-and-present hook renders a passing "✓  <hook>.ts present" row.
       expect(r.stdout).toContain(`${hook}.ts present`);
@@ -501,21 +501,21 @@ describe("t27 aidlc-utility doctor", () => {
   // FINDING #1 (review): the hook check must FLAG a wired-but-missing hook, not
   // silently drop it. The expected roster comes from settings.json (the
   // contract) while presence is probed against .claude/hooks/, so the two
-  // genuinely diverge: deleting aidlc-stop.ts from a project whose settings.json
-  // still wires it produces a loud "✗  aidlc-stop.ts present" failure row. (The
+  // genuinely diverge: deleting aidlc-continue-workflow.ts from a project whose settings.json
+  // still wires it produces a loud "✗  aidlc-continue-workflow.ts present" failure row. (The
   // pre-redesign derive-from-the-hooks-dir approach could not catch this — a
   // missing hook simply wasn't enumerated, so it was never reported.)
   test("12c: doctor flags a settings.json-wired hook that is missing on disk", () => {
     const p = installedProj((claudeDir) => {
-      rmSync(join(claudeDir, "hooks", "aidlc-stop.ts"));
+      rmSync(join(claudeDir, "hooks", "aidlc-continue-workflow.ts"));
     });
     const r = util(["doctor"], p);
     // The missing hook is named with the ✗ failure marker, not silently absent.
-    expect(r.stdout).toContain("✗  aidlc-stop.ts present");
+    expect(r.stdout).toContain("✗  aidlc-continue-workflow.ts present");
     // And doctor exits non-zero (a failed check), so CI/scripts see the breakage.
     expect(r.status).not.toBe(0);
     // Sibling hooks that ARE present still pass — only the deleted one fails.
-    expect(r.stdout).toContain("✓  aidlc-audit-logger.ts present");
+    expect(r.stdout).toContain("✓  aidlc-write-audit-log.ts present");
   });
 
   // FINDING #1 corollary: when settings.json is absent the hook CONTRACT cannot
