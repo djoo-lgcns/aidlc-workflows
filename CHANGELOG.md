@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.38] - 2026-08-05
+
+Fixes a live-session wedge at reviewer-bearing approval gates. A conductor that applied reviewer recommendations AFTER recording the terminal review receipt invalidated its own receipt (a later write to a declared artifact voids it - deliberate fail-closed behavior), then re-reviewed, re-edited, and oscillated until the session hung at the gate. The stage protocol now states the terminal ordering explicitly, and the engine's refusal message teaches it instead of re-triggering the loop. **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the updated protocol, skills, and state tool are installed.
+
+* Stage protocol §12a: the READY receipt is terminal - fixes are applied inside the reviewer iteration loop, never after the terminal receipt, and no `produces[]` artifact may be written between the receipt and gate approval. Suggestions riding on a READY verdict are quoted verbatim at the gate for the human, not applied by the conductor.
+* The engine's "no fresh REVIEW_COMPLETED" refusal now names the terminal ordering (apply fixes first, review last, stop editing) instead of only asking for a fresh receipt, which sent looping conductors back around the cycle.
+
 ## [2.5.37] - 2026-08-03
 
 The orchestrator must never echo a fenced ` ```question ` block as literal chat text: the fence is an authoring spec rendered through each harness's question mechanism, never printed verbatim. Dumping the raw fence yields a non-interactive wall of text and drops the answerable options and "Other" escape supplied by the harness's native tool or numbered-prose fallback. This tightens the harness-neutral stage protocol and every per-harness question-rendering annex (Claude, Codex, Kiro CLI, Kiro IDE, opencode). Literal fences remain in framework documentation, but the stage protocol's fences are normative prompt specs whose contents must still be rendered when their surrounding instructions require them; only raw fence syntax is excluded from live chat. **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the updated protocol and question-rendering annex are installed. Behavior is a documentation and contract change only; no command, flag, or state format changes.
@@ -39,7 +46,6 @@ The plugin contribution seam now merges `adds.scopes`: a plugin can put an exist
 * Quoted `adds.scopes` values participate in the same canonical set union as unquoted values. Disable removes only the membership compose actually added, preserving equivalent authored entries, and a failed graph compile rolls back newly copied plugin files and contribution writes so a corrected retry is not blocked by no-clobber.
 * `adds.requires_stage` remains deferred (declared entries are still drop-logged, not merged).
 * Graph compile now seeds NEW stage numbers in dependency order: each phase's batch of new stages is ordered by its own `requires_stage` edges before next-free indices are assigned (ties break by the authored `number:` hint, then slug; a cycle among new stages is a compile error). The engine owns all number values - a plugin's authored `number:` is a relative-ordering hint, never an absolute claim - so a multi-stage plugin's flow seeds validly regardless of filenames and uncoordinated plugins cannot collide on numbers. Already-pinned rows keep their JSON values unchanged; authored `name:` seeds the display name.
-
 ## [2.5.33] - 2026-08-01
 
 Stage rules are now delivered deterministically instead of depending on the conductor choosing to read paths. The engine emits the active-space rule bundle as bounded `load-steering` directives before `run-stage`, and reviewer checklists are absorbed into reviewer agent bodies at build time - closing the observed skip where stages ran with none of their org/phase memory applied. **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the updated engine, skills, agents, and hooks are installed.
