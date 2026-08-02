@@ -34,7 +34,7 @@ import {
 import { hostname, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { birthIntent } from "../../core/tools/aidlc-lib.ts";
+import { createIntent } from "../../core/tools/aidlc-lib.ts";
 import {
   DEFAULT_RECORD_DIR,
   DEFAULT_SPACE,
@@ -438,7 +438,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
     // the forwarded session_id the core hook's `if (sessionId)` block is inert.
     const dir = scratchProject(true);
     try {
-      const born = birthIntent(dir, "kiro-stamp", "default");
+      const born = createIntent(dir, "kiro-stamp", "default");
       const sid = "kiro-session-abc123";
       const r = runAdapter(dir, "session-start", { ...(FIXTURES.agentSpawn as object), session_id: sid });
       expect(r.code).toBe(0);
@@ -461,7 +461,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
     const dir = scratchProject(true);
     try {
       const sid = "kiro-session-drift";
-      const a = birthIntent(dir, "intent-a", "default");
+      const a = createIntent(dir, "intent-a", "default");
       // First fire stamps the session to A (the live cursor at this point).
       const first = runAdapter(dir, "session-start", {
         ...(FIXTURES.agentSpawn as object),
@@ -472,7 +472,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
       const stampPath = join(dir, "aidlc", ".aidlc-sessions", sid);
       expect(readFileSync(stampPath, "utf-8").trim()).toBe(a.uuid);
       // Move the live cursor to B — a genuine drift A→B.
-      birthIntent(dir, "intent-b", "default");
+      createIntent(dir, "intent-b", "default");
       // Fire again with a resume-shaped payload. Because Kiro coerces to
       // startup, the core hook takes the STARTED path (re-stamps to B), never
       // the RESUMED offer path.

@@ -9,7 +9,7 @@
 // stage graph (data/stage-graph.json), then emits EXACTLY ONE typed Directive
 // (JSON) to stdout. `next` mutates no workflow state itself (state md5 is
 // unchanged across a `next` call) — including birth: on a fresh workspace it
-// NAMES the deterministic `intent-birth` move via a print directive (the
+// NAMES the deterministic `intent-create` move via a print directive (the
 // read-only-engine invariant), and the conductor runs that separate tool. The
 // directive's `kind` tells the conductor the single move to make next; the
 // conductor relays human choices
@@ -339,7 +339,7 @@ interface ParsedFlags {
   readOnlyArgs?: string[]; // allowlisted trailing args for the read-only flag (e.g. --doctor --export --output <dir>)
   resume?: boolean; // --resume: re-enter an existing workflow (resume choice)
   single?: boolean; // --single: run ONE stage under a synthetic workflow id, never touching the main pointer
-  newIntent?: boolean; // --new-intent: the conductor confirmed new-work alongside an active intent → emit the SAME birth directive (with the --label seam) the fresh-start path uses, instead of constructing intent-birth from SKILL.md prose
+  newIntent?: boolean; // --new-intent: the conductor confirmed new-work alongside an active intent → emit the SAME birth directive (with the --label seam) the fresh-start path uses, instead of constructing intent-create from SKILL.md prose
   intent?: string; // freeform request text (no leading --flag)
   workspaceCommand?: WorkspaceCommand; // leading workspace command (space/space-create/intent)
   compose?: boolean; // leading `compose` verb: force the composer (front or in-flight)
@@ -474,7 +474,7 @@ function parseNextFlags(args: string[]): ParsedFlags {
 // to START a workflow; there is nothing to run until an intent is born, and
 // birth is a mutation, so `next` (read-only) NAMES the move as a
 // run-then-continue print and the conductor runs it, then re-runs `next` to land
-// on the first stage. The named move is the deterministic `intent-birth` handler
+// on the first stage. The named move is the deterministic `intent-create` handler
 // (mint UUIDv7, create the intent dir, append intents.json, set active-intent,
 // emit WORKFLOW_STARTED/PHASE_STARTED into the new intent's audit) — the
 // read-only-engine invariant is preserved: the routing tool names, a separate
@@ -485,8 +485,8 @@ function parseNextFlags(args: string[]): ParsedFlags {
 // Branch 9 (explicit --scope flag) so the explicit-naming shapes emit identical
 // directives. The harness dir is resolved through harnessDir() so the directive
 // names the right tree on every harness (.claude/.kiro/.codex).
-function birthPrintDirective(scope: string, flags: ParsedFlags, description?: string): PrintDirective {
-  const cmd = [`intent-birth --scope ${scope}`];
+function createPrintDirective(scope: string, flags: ParsedFlags, description?: string): PrintDirective {
+  const cmd = [`intent-create --scope ${scope}`];
   let labelHint = "";
   if (description && description.length > 0) {
     // Shell-quote the freeform description so multi-word intents survive intact.
@@ -517,7 +517,7 @@ function birthPrintDirective(scope: string, flags: ParsedFlags, description?: st
 // approve/edit/reject gate); it never dispatches or writes itself. Two modes:
 //   - front (no state file): compose a scope from the prompt (or a scan
 //     report) BEFORE birth. The composer proposes; on approval the conductor
-//     continues into the normal intent-birth with the chosen scope.
+//     continues into the normal intent-create with the chosen scope.
 //   - in-flight (state file present): re-shape the RUNNING workflow's pending
 //     stages (SKIP / un-SKIP), which lands as suffix flips via the recompose
 //     verb - never a silent advance of the current stage.
@@ -2186,7 +2186,7 @@ function handleNext(args: string[], projectDir: string | undefined): void {
   // (Branch 3 — the legacy `--init` flag — retired in P4. There is no longer a
   // user-facing `/aidlc --init`: the workspace shell ships in dist/ (SEED) and
   // the first intent is BORN, not scaffolded. Birth flows through the
-  // birthPrintDirective seam below — Branch 7b/9a name the `intent-birth` move
+  // createPrintDirective seam below — Branch 7b/9a name the `intent-create` move
   // for a resolved scope on a fresh workspace; Branch 8 surfaces the freeform
   // scope-confirm `ask` first. No `--init`/`--force` flag reaches the engine.)
 
@@ -2266,10 +2266,10 @@ function handleNext(args: string[], projectDir: string | undefined): void {
 
   // Branch 4a — --new-intent: the conductor recognized NEW WORK alongside an
   // already-active intent, ran the SKILL.md offer (AskUserQuestion), and the human
-  // confirmed. Rather than have the conductor CONSTRUCT the intent-birth command
+  // confirmed. Rather than have the conductor CONSTRUCT the intent-create command
   // from SKILL.md prose — a weak signal the live model dropped the --label seam on
   // (the 2nd/3rd intents truncated where the 1st, driven by this directive, got a
-  // clean LLM label) — the engine emits the SAME birthPrintDirective the fresh-
+  // clean LLM label) — the engine emits the SAME createPrintDirective the fresh-
   // start path (Branch 7b/9a) uses, so BOTH births carry the --label placeholder
   // identically. The human-yes gate already happened conductor-side; this is the
   // run-then-continue print that performs it. Precedes every continuation branch
@@ -2283,7 +2283,7 @@ function handleNext(args: string[], projectDir: string | undefined): void {
     // back to the resolved scope only when no flag was passed. Both were already
     // validated above (Branch 3b validates flags.scope; the unknown-scope check
     // validates the resolved scope).
-    emit(birthPrintDirective(flags.scope ?? scope, flags, flags.intent));
+    emit(createPrintDirective(flags.scope ?? scope, flags, flags.intent));
     return;
   }
 
@@ -2400,7 +2400,7 @@ function handleNext(args: string[], projectDir: string | undefined): void {
   // `/aidlc bugfix Fix duplicate todos` both name a scope; the parser peels the
   // leading valid token into positionalScope and leaves any trailing prose in
   // flags.intent. Birth the positional scope and preserve that prose as the
-  // intent-birth --arguments value. An explicit --scope outranks this branch
+  // intent-create --arguments value. An explicit --scope outranks this branch
   // and reaches Branch 9a; --resume never births.
   if (
     !stateContent &&
@@ -2416,7 +2416,7 @@ function handleNext(args: string[], projectDir: string | undefined): void {
       emit(pick);
       return;
     }
-    emit(birthPrintDirective(flags.positionalScope, flags, flags.intent));
+    emit(createPrintDirective(flags.positionalScope, flags, flags.intent));
     return;
   }
 
@@ -2499,7 +2499,7 @@ function handleNext(args: string[], projectDir: string | undefined): void {
     // flags.intent here is freeform feature text typed alongside an explicit
     // --scope (e.g. `/aidlc --scope feature "build the auth service"`) — thread
     // it as the born intent's description; a bare `--scope <s>` carries none.
-    emit(birthPrintDirective(scope, flags, flags.intent));
+    emit(createPrintDirective(scope, flags, flags.intent));
     return;
   }
   //
@@ -3155,7 +3155,7 @@ function emitForSlug(
 // `single:true` marker gives the conductor a typed branch before ordinary gate
 // handling; isolated runs have no main-workflow approval lifecycle.
 const SINGLE_INIT_ERROR =
-  "Cannot run an initialization stage with --single. Initialization is bootstrap (it births the intent + state); it runs automatically when you start a workflow (describe what to build, e.g. /aidlc \"build the auth service\").";
+  "Cannot run an initialization stage with --single. Initialization is bootstrap (it creates the intent + state); it runs automatically when you start a workflow (describe what to build, e.g. /aidlc \"build the auth service\").";
 
 function emitSingleRunStage(
   slug: string,

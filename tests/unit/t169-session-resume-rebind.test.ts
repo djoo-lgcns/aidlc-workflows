@@ -18,17 +18,17 @@
 // none reachable by importing a function. So this twin SPAWNS the real shipped
 // hook the same way Claude Code's SessionStart drives it (same pattern as t10).
 //
-// SEEDING: birthIntent() (aidlc-lib.ts) mints two real per-intent records in
+// SEEDING: createIntent() (aidlc-lib.ts) mints two real per-intent records in
 // space "default" and sets the active-intent cursor; setActiveIntentCursor()
 // moves the cursor between the START fire and the RESUME fire to simulate the
-// drift. The hook gates on stateFilePath existing, which birthIntent satisfies
+// drift. The hook gates on stateFilePath existing, which createIntent satisfies
 // (it writes a header-only state stub bound to the active cursor).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  birthIntent,
+  createIntent,
   setActiveIntentCursor,
 } from "../../dist/claude/.claude/tools/aidlc-lib.ts";
 import {
@@ -75,11 +75,11 @@ function fire(p: string, source: string, sessionId: string): FireResult {
 
 describe("t169 session-start resume rebind (mechanism cli — spawned hook + cursor drift)", () => {
   test("startup stamps the working intent; resume after a cursor move OFFERS a rebind", () => {
-    // Two real intents in the default space. birthIntent leaves the cursor on
+    // Two real intents in the default space. createIntent leaves the cursor on
     // the LAST born (export-bug). Move it to auth-service so the conversation
     // starts bound to auth-service.
-    const a = birthIntent(proj, "auth-service", "default", "feature");
-    const b = birthIntent(proj, "export-bug", "default", "feature");
+    const a = createIntent(proj, "auth-service", "default", "feature");
+    const b = createIntent(proj, "export-bug", "default", "feature");
     setActiveIntentCursor(proj, a.dirName, "default"); // cursor → auth-service
 
     // 1) STARTUP: this conversation (session "S1") stamps auth-service's uuid.
@@ -103,7 +103,7 @@ describe("t169 session-start resume rebind (mechanism cli — spawned hook + cur
   });
 
   test("resume with the cursor UNCHANGED offers nothing (no false positive)", () => {
-    const a = birthIntent(proj, "billing", "default", "feature");
+    const a = createIntent(proj, "billing", "default", "feature");
     setActiveIntentCursor(proj, a.dirName, "default");
     // Startup stamps billing; cursor stays on billing.
     fire(proj, "startup", "S2");
@@ -113,7 +113,7 @@ describe("t169 session-start resume rebind (mechanism cli — spawned hook + cur
   });
 
   test("resume with NO prior stamp (fresh session id) offers nothing", () => {
-    const a = birthIntent(proj, "search", "default", "feature");
+    const a = createIntent(proj, "search", "default", "feature");
     setActiveIntentCursor(proj, a.dirName, "default");
     // A resume for a session that never fired startup here → no stamp → no offer.
     const resumed = fire(proj, "resume", "NEVER-STAMPED");

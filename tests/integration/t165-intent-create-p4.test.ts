@@ -1,13 +1,13 @@
-// covers: subcommand:aidlc-utility:intent-birth, subcommand:aidlc-utility:intent, subcommand:aidlc-utility:space, subcommand:aidlc-utility:space-create, function:birthIntent, function:listSpaces, function:listIntents, function:slugify, function:updateIntentStatus, function:migrateFlatLayout, function:resolveBirthRepoSet, function:discoverSiblingRepos
+// covers: subcommand:aidlc-utility:intent-create, subcommand:aidlc-utility:intent, subcommand:aidlc-utility:space, subcommand:aidlc-utility:space-create, function:createIntent, function:listSpaces, function:listIntents, function:slugify, function:updateIntentStatus, function:migrateFlatLayout, function:resolveBirthRepoSet, function:discoverSiblingRepos
 //
 // Mechanism: cli (spawned dist tools) + in-process pure-function asserts.
 // P4 — retire the user-facing --init; the engine auto-births the first intent
 // CONDUCTOR-SIDE (the read-only routing tool NAMES the move, the deterministic
-// `intent-birth` handler mutates), plus the intent/space verb families + the
+// `intent-create` handler mutates), plus the intent/space verb families + the
 // deterministic query layer (listSpaces/listIntents, --json) + the intent
 // status lifecycle + the migration wiring.
 //
-// WHY a subprocess for birth: intent-birth mutates the workspace under the
+// WHY a subprocess for birth: intent-create mutates the workspace under the
 // WORKSPACE audit lock; spawning the dist tool exercises the real handler +
 // the real lock + the real per-intent state/audit resolution end-to-end, the
 // way the conductor runs it. The query layer (listSpaces/listIntents/slugify/
@@ -88,24 +88,24 @@ const intentsDir = (p: string, space = "default"): string =>
 // ============================================================
 // Auto-birth on an empty workspace
 // ============================================================
-describe("t164 auto-birth (intent-birth) on an empty workspace", () => {
-  test("intent-birth help flags and the init alias are read-only", () => {
+describe("t164 auto-birth (intent-create) on an empty workspace", () => {
+  test("intent-create help flags and the init alias are read-only", () => {
     for (const args of [
-      ["intent-birth", "--help"],
-      ["intent-birth", "-h"],
+      ["intent-create", "--help"],
+      ["intent-create", "-h"],
       ["init", "--help"],
     ]) {
       const r = util(args);
       expect(r.status, args.join(" ")).toBe(0);
       expect(r.stdout, args.join(" ")).toContain(
-        "Usage: aidlc-utility intent-birth --scope <scope>",
+        "Usage: aidlc-utility intent-create --scope <scope>",
       );
     }
     expect(existsSync(intentsDir(proj))).toBe(false);
   });
 
   test("birth mints a per-intent record under spaces/default/intents/ with state", () => {
-    const r = util(["intent-birth", "--scope", "poc"]);
+    const r = util(["intent-create", "--scope", "poc"]);
     expect(r.status).toBe(0);
     const records = readdirSync(intentsDir(proj)).filter((d) =>
       existsSync(join(intentsDir(proj), d, "aidlc-state.md")),
@@ -130,7 +130,7 @@ describe("t164 auto-birth (intent-birth) on an empty workspace", () => {
   });
 
   test("birth slugs the freeform --arguments description (SLUG_RE-valid)", () => {
-    const r = util(["intent-birth", "--scope", "feature", "--arguments", "Build the Auth Service!!"]);
+    const r = util(["intent-create", "--scope", "feature", "--arguments", "Build the Auth Service!!"]);
     expect(r.status).toBe(0);
     const dir = activeIntent(proj);
     expect(dir).not.toBeNull();
@@ -140,11 +140,11 @@ describe("t164 auto-birth (intent-birth) on an empty workspace", () => {
     expect(dir).toMatch(/^\d{6}-build-the-auth-service$/);
   });
 
-  test("the engine NAMES intent-birth on a fresh workspace (read-only — no state written)", () => {
+  test("the engine NAMES intent-create on a fresh workspace (read-only — no state written)", () => {
     const r = next(["--scope", "poc"]);
     const d = JSON.parse(r.stdout.trim());
     expect(d.kind).toBe("print");
-    expect(d.message).toContain("intent-birth --scope poc");
+    expect(d.message).toContain("intent-create --scope poc");
     // next is read-only: it must NOT have birthed anything.
     expect(existsSync(intentsDir(proj))).toBe(false);
     expect(existsSync(seededStateFile(proj))).toBe(false);
@@ -162,7 +162,7 @@ describe("t165 P7 intent repo set captured at birth", () => {
   };
 
   test("explicit --repos a,b is recorded (sorted, deduped) in intents.json", () => {
-    const r = util(["intent-birth", "--scope", "feature", "--repos", "repo-b,repo-a,repo-a"]);
+    const r = util(["intent-create", "--scope", "feature", "--repos", "repo-b,repo-a,repo-a"]);
     expect(r.status).toBe(0);
     const reg = readIntentRegistry(proj);
     expect(reg.length).toBe(1);
@@ -174,7 +174,7 @@ describe("t165 P7 intent repo set captured at birth", () => {
 
   test("explicit --repos wins even when sibling repos are present on disk", () => {
     makeRepo(proj, "discovered-x");
-    const r = util(["intent-birth", "--scope", "feature", "--repos", "only-this"]);
+    const r = util(["intent-create", "--scope", "feature", "--repos", "only-this"]);
     expect(r.status).toBe(0);
     expect(readIntentRegistry(proj)[0].repos).toEqual(["only-this"]);
   });
@@ -184,13 +184,13 @@ describe("t165 P7 intent repo set captured at birth", () => {
     makeRepo(proj, "svc-web");
     // A non-repo child dir (no .git) is NOT discovered.
     mkdirSync(join(proj, "docs-only"), { recursive: true });
-    const r = util(["intent-birth", "--scope", "feature"]);
+    const r = util(["intent-create", "--scope", "feature"]);
     expect(r.status).toBe(0);
     expect(readIntentRegistry(proj)[0].repos).toEqual(["svc-api", "svc-web"]);
   });
 
   test("no --repos and no sibling repos → no repos row (legacy single-repo inference)", () => {
-    const r = util(["intent-birth", "--scope", "poc"]);
+    const r = util(["intent-create", "--scope", "poc"]);
     expect(r.status).toBe(0);
     // An empty set records NO repos row — the lone repo is inferred downstream.
     expect(readIntentRegistry(proj)[0].repos).toBeUndefined();
@@ -201,13 +201,13 @@ describe("t165 P7 intent repo set captured at birth", () => {
     mkdirSync(join(proj, ".claude", ".git"), { recursive: true });
     mkdirSync(join(proj, "aidlc", ".git"), { recursive: true });
     makeRepo(proj, "real-repo");
-    const r = util(["intent-birth", "--scope", "feature"]);
+    const r = util(["intent-create", "--scope", "feature"]);
     expect(r.status).toBe(0);
     expect(readIntentRegistry(proj)[0].repos).toEqual(["real-repo"]);
   });
 
   test("an invalid --repos entry is rejected before any mutation", () => {
-    const r = util(["intent-birth", "--scope", "feature", "--repos", "../escape"]);
+    const r = util(["intent-create", "--scope", "feature", "--repos", "../escape"]);
     expect(r.status).not.toBe(0);
     expect(r.out).toContain("Invalid --repos entry");
     // Nothing was born.
@@ -220,7 +220,7 @@ describe("t165 P7 intent repo set captured at birth", () => {
 // ============================================================
 describe("t164 concurrent-birth integrity", () => {
   test("two simultaneous births → 2 distinct intents, no lost intents.json update", async () => {
-    // Fire two intent-birth processes in parallel against the SAME empty
+    // Fire two intent-create processes in parallel against the SAME empty
     // workspace. The workspace-bucket append lock serializes the empty-check +
     // the intents.json append, so the second sees the first's row — both births
     // land distinct uuids + dirs, and intents.json carries BOTH (no lost write).
@@ -228,7 +228,7 @@ describe("t164 concurrent-birth integrity", () => {
     delete env.AWS_AIDLC_DEFAULT_SCOPE;
     const spawnBirth = (scope: string) =>
       Bun.spawn({
-        cmd: [BUN, UTIL, "intent-birth", "--scope", scope, "--project-dir", proj],
+        cmd: [BUN, UTIL, "intent-create", "--scope", scope, "--project-dir", proj],
         stdout: "ignore",
         stderr: "ignore",
         env,
@@ -256,9 +256,9 @@ describe("t164 concurrent-birth integrity", () => {
 // ============================================================
 describe("t164 new-work-while-active", () => {
   test("a second birth alongside an active intent adds a second intent", () => {
-    expect(util(["intent-birth", "--scope", "poc"]).status).toBe(0);
+    expect(util(["intent-create", "--scope", "poc"]).status).toBe(0);
     const first = activeIntent(proj);
-    expect(util(["intent-birth", "--scope", "feature", "--arguments", "second feature"]).status).toBe(0);
+    expect(util(["intent-create", "--scope", "feature", "--arguments", "second feature"]).status).toBe(0);
     const reg = readIntentRegistry(proj);
     expect(reg.length).toBe(2);
     // The active-intent cursor now points at the SECOND (most recent) birth.
@@ -267,12 +267,12 @@ describe("t164 new-work-while-active", () => {
   });
 
   test("bare /aidlc resumes the active intent (happy path, not a birth)", () => {
-    expect(util(["intent-birth", "--scope", "feature"]).status).toBe(0);
+    expect(util(["intent-create", "--scope", "feature"]).status).toBe(0);
     // With state present, `next` resolves the happy path — never a birth print.
     const r = next([]);
     const d = JSON.parse(r.stdout.trim());
     expect(d.kind).not.toBe("print"); // not a birth
-    expect(r.out).not.toContain("intent-birth");
+    expect(r.out).not.toContain("intent-create");
   });
 });
 
@@ -310,7 +310,7 @@ describe("t164 slugify", () => {
 // ============================================================
 describe("t164 intent status lifecycle", () => {
   test("birth writes in-flight; updateIntentStatus flips to complete; an abandoned intent stays in-flight", () => {
-    expect(util(["intent-birth", "--scope", "poc"]).status).toBe(0);
+    expect(util(["intent-create", "--scope", "poc"]).status).toBe(0);
     const dir = activeIntent(proj);
     expect(dir).not.toBeNull();
     expect(readIntentRegistry(proj)[0].status).toBe("in-flight");
@@ -325,7 +325,7 @@ describe("t164 intent status lifecycle", () => {
 
     // Birth a SECOND intent and leave it (abandon) — it stays in-flight, never
     // self-completes.
-    expect(util(["intent-birth", "--scope", "bugfix"]).status).toBe(0);
+    expect(util(["intent-create", "--scope", "bugfix"]).status).toBe(0);
     const abandoned = readIntentRegistry(proj).find((e) => e.scope === "bugfix");
     expect(abandoned?.status).toBe("in-flight");
   });
@@ -344,7 +344,7 @@ describe("t164 query layer (listSpaces / listIntents + --json)", () => {
   });
 
   test("after birth: listIntents has the in-flight row, flagged active", () => {
-    expect(util(["intent-birth", "--scope", "poc"]).status).toBe(0);
+    expect(util(["intent-create", "--scope", "poc"]).status).toBe(0);
     const intents = listIntents(proj);
     expect(intents.length).toBe(1);
     expect(intents[0].status).toBe("in-flight");
@@ -353,7 +353,7 @@ describe("t164 query layer (listSpaces / listIntents + --json)", () => {
   });
 
   test("human and --json agree (intent verb)", () => {
-    expect(util(["intent-birth", "--scope", "poc"]).status).toBe(0);
+    expect(util(["intent-create", "--scope", "poc"]).status).toBe(0);
     const human = util(["intent"]).stdout;
     const jsonOut = util(["intent", "--json"]).stdout;
     const parsed = JSON.parse(jsonOut.trim());
@@ -403,9 +403,9 @@ describe("t164 query layer (listSpaces / listIntents + --json)", () => {
   });
 
   test("switching intents is a pure cursor write", () => {
-    expect(util(["intent-birth", "--scope", "poc"]).status).toBe(0);
+    expect(util(["intent-create", "--scope", "poc"]).status).toBe(0);
     const a = activeIntent(proj) as string;
-    expect(util(["intent-birth", "--scope", "feature"]).status).toBe(0);
+    expect(util(["intent-create", "--scope", "feature"]).status).toBe(0);
     const b = activeIntent(proj) as string;
     expect(b).not.toBe(a);
     // Switch back to the first by its record-dir name.
@@ -430,7 +430,7 @@ describe("t164 query layer (listSpaces / listIntents + --json)", () => {
   test("'help' is refused at both creation chokepoints", () => {
     // The router treats `intent help` / `space help` as help requests, so a
     // record slugged "help" would be unswitchable by name. Creation refuses it.
-    const b = util(["intent-birth", "--scope", "poc", "--label", "help"]);
+    const b = util(["intent-create", "--scope", "poc", "--label", "help"]);
     expect(b.status).not.toBe(0);
     expect(b.out).toContain("reserved name");
     // The refusal fires before ANY mutation - the intents dir was never even
@@ -516,7 +516,7 @@ describe("t164 doctor readiness against the shipped shell", () => {
 // Migration wiring: a flat aidlc-docs/ project migrates on first birth + git-rm
 // ============================================================
 describe("t164 migration wiring (flat → per-intent on first birth)", () => {
-  test("intent-birth migrates a flat project, git-rm's the flat tree, and is a no-op re-run", () => {
+  test("intent-create migrates a flat project, git-rm's the flat tree, and is a no-op re-run", () => {
     // Seed a flat (pre-workspace) project: aidlc-docs/aidlc-state.md present, no
     // intent record, no .migrated marker.
     const flat = join(proj, "aidlc-docs");
@@ -528,7 +528,7 @@ describe("t164 migration wiring (flat → per-intent on first birth)", () => {
     );
     writeFileSync(join(flat, "audit.md"), "# AI-DLC Audit Log\n", "utf-8");
 
-    const r = util(["intent-birth", "--scope", "feature"]);
+    const r = util(["intent-create", "--scope", "feature"]);
     expect(r.status).toBe(0);
 
     // Migration moved the flat state into a per-intent record (NOT a second
@@ -547,7 +547,7 @@ describe("t164 migration wiring (flat → per-intent on first birth)", () => {
 
     // No-op re-run: a second birth does NOT re-migrate (marker present) — it
     // births a fresh second intent instead.
-    const r2 = util(["intent-birth", "--scope", "poc"]);
+    const r2 = util(["intent-create", "--scope", "poc"]);
     expect(r2.status).toBe(0);
     const records2 = readdirSync(intentsDir(proj)).filter((d) =>
       existsSync(join(intentsDir(proj), d, "aidlc-state.md")),

@@ -1039,18 +1039,6 @@
     },
     {
       "unitClass": "function",
-      "unitId": "function:birthIntent",
-      "minMechanism": "none",
-      "coveredBy": [
-        {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
-          "mechanism": "cli"
-        }
-      ],
-      "status": "covered"
-    },
-    {
-      "unitClass": "function",
       "unitId": "function:BOLT_SLUG_MAX_LENGTH",
       "minMechanism": "none",
       "coveredBy": [],
@@ -1256,6 +1244,18 @@
     },
     {
       "unitClass": "function",
+      "unitId": "function:createIntent",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "function",
       "unitId": "function:CURRENT_SESSION_FILE",
       "minMechanism": "none",
       "coveredBy": [],
@@ -1295,7 +1295,7 @@
       "minMechanism": "none",
       "coveredBy": [
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         }
       ],
@@ -1851,7 +1851,7 @@
       "minMechanism": "none",
       "coveredBy": [
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         },
         {
@@ -1867,7 +1867,7 @@
       "minMechanism": "none",
       "coveredBy": [
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         }
       ],
@@ -2089,7 +2089,7 @@
       "minMechanism": "none",
       "coveredBy": [
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         },
         {
@@ -2582,7 +2582,7 @@
       "minMechanism": "none",
       "coveredBy": [
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         }
       ],
@@ -2871,7 +2871,7 @@
       "minMechanism": "none",
       "coveredBy": [
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         },
         {
@@ -3066,7 +3066,7 @@
       "minMechanism": "none",
       "coveredBy": [
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         }
       ],
@@ -5339,7 +5339,7 @@
           "mechanism": "sdk"
         },
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         },
         {
@@ -5351,7 +5351,7 @@
     },
     {
       "unitClass": "subcommand",
-      "unitId": "aidlc-utility intent-birth",
+      "unitId": "aidlc-utility intent-create",
       "minMechanism": "cli",
       "coveredBy": [
         {
@@ -5367,7 +5367,7 @@
           "mechanism": "sdk"
         },
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         },
         {
@@ -5555,7 +5555,7 @@
           "mechanism": "sdk"
         },
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         },
         {
@@ -5583,7 +5583,7 @@
           "mechanism": "sdk"
         },
         {
-          "file": "tests/integration/t165-intent-birth-p4.test.ts",
+          "file": "tests/integration/t165-intent-create-p4.test.ts",
           "mechanism": "cli"
         },
         {

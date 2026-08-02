@@ -8,7 +8,7 @@ All 3 stages in this phase execute for EVERY scope — there are no conditional 
 
 The welcome message is rendered at session start via the `companyAnnouncements` entry in `settings.json`. It is not a stage — no stage file, no audit event, no checkbox.
 
-All three stages run inside a single deterministic `bun .claude/tools/aidlc-utility.ts intent-birth --scope <scope>` call that completes in well under a second. The conductor creates 3 tasks in the sidebar (Workspace Scaffold, Workspace Detection, State Init) for observability, then marks them all completed once the tool returns.
+All three stages run inside a single deterministic `bun .claude/tools/aidlc-utility.ts intent-create --scope <scope>` call that completes in well under a second. The conductor creates 3 tasks in the sidebar (Workspace Scaffold, Workspace Detection, State Init) for observability, then marks them all completed once the tool returns.
 
 ## Scope-Driven Stage Inclusion
 
@@ -64,7 +64,7 @@ All three stages run inside a single deterministic `bun .claude/tools/aidlc-util
 
 ### Notes
 - Idempotent — skips directories and files that already exist
-- Runs inside `aidlc-utility intent-birth`, not via LLM
+- Runs inside `aidlc-utility intent-create`, not via LLM
 
 ---
 
@@ -98,7 +98,7 @@ All three stages run inside a single deterministic `bun .claude/tools/aidlc-util
 - `WORKSPACE_SCANNED` audit event capturing the scan result
 
 ### Notes
-- Runs as a deterministic scanner inside `aidlc-utility intent-birth`. No LLM subagent dispatch.
+- Runs as a deterministic scanner inside `aidlc-utility intent-create`. No LLM subagent dispatch.
 - Symbolic links are not followed (cycle protection via `lstatSync`)
 - Excludes `.claude/`, `<record>/`, `node_modules/`, `.git/`, `dist/`, `build/`, `.next/`, `target/`, `vendor/`
 - `package.json` with only `devDependencies` is treated as tooling/scaffolding and does not alone cause brownfield classification

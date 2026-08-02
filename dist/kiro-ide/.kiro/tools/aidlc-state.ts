@@ -3238,7 +3238,7 @@ function handleFork(args: string[]): void {
     // Lock the SAME per-intent bucket the inner state/audit writes target
     // (resolvedIntent+space threaded), NOT the __workspace__ sentinel — without
     // this the transaction serializes every intent's fork on one workspace lock
-    // (the P3 shared-lock cliff) and intent-birth/migration would block unrelated
+    // (the P3 shared-lock cliff) and intent-create/migration would block unrelated
     // forks. resolvedIntent (not raw flags.intent) makes LOCK == WRITE even when
     // --intent is omitted (both resolve to the active record).
     srcSha = withAuditLock(pd, () => {
@@ -3390,7 +3390,7 @@ function handleMerge(args: string[]): void {
   try {
     // Lock the per-intent bucket (resolvedIntent+space threaded) the inner
     // writes target — same fix as handleFork: the __workspace__ sentinel would
-    // serialize all intents' merges and let intent-birth block an unrelated
+    // serialize all intents' merges and let intent-create block an unrelated
     // merge (P3 shared-lock cliff). resolvedIntent (not raw flags.intent) makes
     // LOCK == WRITE on the omitted-intent path.
     result = withAuditLock(pd, () => {

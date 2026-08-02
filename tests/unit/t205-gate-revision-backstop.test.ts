@@ -182,7 +182,7 @@ function feasibilityArtifact(proj: string, name: string): string {
 // The unit fixture already seeds the production registry and active-intent
 // cursor around the requested brownfield state. Rewriting its lone repos field,
 // as t182 does, keeps this process-boundary test focused on report and approve;
-// intent-birth would replace the fixture state and test an unrelated transaction.
+// intent-create would replace the fixture state and test an unrelated transaction.
 function rewriteIntentRepos(proj: string, repos: string[]): void {
   const regPath = join(proj, "aidlc", "spaces", DEFAULT_SPACE, "intents", "intents.json");
   const rows = JSON.parse(readFileSync(regPath, "utf-8")) as Array<Record<string, unknown>>;

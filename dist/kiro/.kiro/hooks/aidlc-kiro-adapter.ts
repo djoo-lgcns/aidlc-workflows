@@ -301,7 +301,7 @@ if (target === "verb-intercept") {
     const executable = process.env.AIDLC_COMPILED_EXECUTABLE;
     const compiledArgs = (() => {
       if (cmd.subcommand === "space-create") return ["space", "create", ...forwarded];
-      if (cmd.subcommand === "intent-birth") return ["intent", "birth", ...forwarded];
+      if (cmd.subcommand === "intent-create") return ["intent", "create", ...forwarded];
       return [cmd.subcommand, ...forwarded];
     })();
     const utilArgs = [join(".kiro", "tools", "aidlc-utility.ts"), cmd.subcommand, ...forwarded];

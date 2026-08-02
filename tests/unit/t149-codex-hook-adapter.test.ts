@@ -45,7 +45,7 @@ import {
 import { hostname, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { birthIntent } from "../../core/tools/aidlc-lib.ts";
+import { createIntent } from "../../core/tools/aidlc-lib.ts";
 import {
   DEFAULT_RECORD_DIR,
   DEFAULT_SPACE,
@@ -477,7 +477,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
     // and no stamp file appears.
     const dir = scratchProject(true);
     try {
-      const born = birthIntent(dir, "codex-rebind", "default");
+      const born = createIntent(dir, "codex-rebind", "default");
       const sid = String(FIXTURES.sessionStart.session_id);
       const r = runAdapter(dir, "session-start", withCwd(FIXTURES.sessionStart, dir));
       expect(r.code).toBe(0);
@@ -497,14 +497,14 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
     const dir = scratchProject(true);
     try {
       const sid = String(FIXTURES.sessionStart.session_id);
-      const a = birthIntent(dir, "intent-a", "default");
+      const a = createIntent(dir, "intent-a", "default");
       // Stamp the session to A via a startup fire (the core hook stamps the
       // live cursor's uuid — currently A).
       runAdapter(dir, "session-start", withCwd({ ...FIXTURES.sessionStart, source: "startup" }, dir));
       const stampPath = join(dir, "aidlc", ".aidlc-sessions", sid);
       expect(readFileSync(stampPath, "utf-8").trim()).toBe(a.uuid);
       // Move the live cursor to B (the drift the resume must detect).
-      birthIntent(dir, "intent-b", "default");
+      createIntent(dir, "intent-b", "default");
       const r = runAdapter(
         dir,
         "session-start",

@@ -169,7 +169,7 @@ function stripScope(overrides?: Record<string, string>): Record<string, string> 
   return { ...base, ...(overrides ?? {}) };
 }
 
-// P4: intent-birth writes state into the born intent's per-intent record dir
+// P4: intent-create writes state into the born intent's per-intent record dir
 // (aidlc/spaces/<space>/intents/<slug>-<id8>/), not the flat aidlc-docs/. Resolve
 // the record dir from the active-space + active-intent cursors, falling back to
 // the flat layout for a not-yet-born / seeded-flat project (the many state-seeding
@@ -401,7 +401,7 @@ describe("t27 aidlc-utility status", () => {
 
   test("67: status shows Awaiting your approval for [?] stage", () => {
     const p = bareProj();
-    util(["intent-birth", "--scope", "bugfix"], p);
+    util(["intent-create", "--scope", "bugfix"], p);
     state(["advance", "workspace-scaffold"], p);
     state(["advance", "workspace-detection"], p);
     state(["advance", "state-init"], p);
@@ -413,7 +413,7 @@ describe("t27 aidlc-utility status", () => {
 
   test("68: status shows Revising and revision count for [R] stage", () => {
     const p = bareProj();
-    util(["intent-birth", "--scope", "bugfix"], p);
+    util(["intent-create", "--scope", "bugfix"], p);
     state(["advance", "workspace-scaffold"], p);
     state(["advance", "workspace-detection"], p);
     state(["advance", "state-init"], p);
@@ -555,7 +555,7 @@ describe("t27 aidlc-utility doctor", () => {
 describe("t27 aidlc-utility init", () => {
   test("14: init creates aidlc-state.md, audit shard dir, and knowledge/ directory", () => {
     const p = emptyDir();
-    util(["intent-birth", "--scope", "poc"], p);
+    util(["intent-create", "--scope", "poc"], p);
     // P4: birth writes a per-intent record (state + audit shards), not the flat
     // aidlc-docs/ trio. (Domain knowledge is SPACE-level, asserted below.)
     expect(existsSync(statePath(p))).toBe(true);
@@ -570,21 +570,21 @@ describe("t27 aidlc-utility init", () => {
 
   test("15: init output contains birth + state-init summary", () => {
     const p = emptyDir();
-    const r = util(["intent-birth", "--scope", "poc"], p);
-    // P4: init is a back-compat alias for intent-birth; the stdout now reports the
+    const r = util(["intent-create", "--scope", "poc"], p);
+    // P4: init is a back-compat alias for intent-create; the stdout now reports the
     // born intent + state init, not the old "Workspace scaffolded" scaffold line.
     expect(r.stdout).toContain("Intent born:");
     expect(r.stdout).toContain("State initialized:");
   });
 
-  // P4 retires the --init re-init guard: init/intent-birth births a per-intent
+  // P4 retires the --init re-init guard: init/intent-create births a per-intent
   // record, so a SECOND init is not an error — it simply births a second intent
   // in the workspace. There is no "already exists" / --force path anymore.
   test("second init births a second intent (no re-init guard): exit 0, no 'already exists'", () => {
     const p = emptyDir();
-    const first = util(["intent-birth", "--scope", "poc"], p);
+    const first = util(["intent-create", "--scope", "poc"], p);
     expect(first.status).toBe(0);
-    const second = util(["intent-birth", "--scope", "poc"], p);
+    const second = util(["intent-create", "--scope", "poc"], p);
     expect(second.status).toBe(0);
     expect(second.out).not.toContain("already exists");
     expect(second.out).not.toContain("--force");
@@ -598,25 +598,25 @@ describe("t27 aidlc-utility init", () => {
 
   test("33: init bootstrap has workspace-scaffold checkbox", () => {
     const p = emptyDir();
-    util(["intent-birth", "--scope", "poc"], p);
+    util(["intent-create", "--scope", "poc"], p);
     expect(readFileSync(statePath(p), "utf-8")).toContain("workspace-scaffold");
   });
 
   test("45: init with --depth overrides bugfix default (Standard)", () => {
     const p = emptyDir();
-    util(["intent-birth", "--scope", "bugfix", "--depth", "standard"], p);
+    util(["intent-create", "--scope", "bugfix", "--depth", "standard"], p);
     expect(stateField(p, "Depth")).toBe("Standard");
   });
 
   test("54: init with --test-strategy overrides default (Minimal)", () => {
     const p = emptyDir();
-    util(["intent-birth", "--scope", "feature", "--test-strategy", "minimal"], p);
+    util(["intent-create", "--scope", "feature", "--test-strategy", "minimal"], p);
     expect(stateField(p, "Test Strategy")).toBe("Minimal");
   });
 
   test("69: init emits WORKFLOW_STARTED as the first audit event", () => {
     const p = bareProj();
-    util(["intent-birth", "--scope", "bugfix"], p);
+    util(["intent-create", "--scope", "bugfix"], p);
     // P4: audit is sharded under the born record's audit/ dir; read via readAudit.
     // First **Event**: line after the `# AI-DLC Audit Log` header.
     const firstEvent = readAudit(p)
@@ -881,7 +881,7 @@ describe("t27 aidlc-utility config-change", () => {
 describe("t27 aidlc-utility detect-scope", () => {
   test("65: detect-scope emits exactly one SCOPE_DETECTED + JSON ack", () => {
     const p = bareProj();
-    util(["intent-birth", "--scope", "bugfix"], p);
+    util(["intent-create", "--scope", "bugfix"], p);
     const r = util(
       ["detect-scope", "--scope", "feature", "--input", "build a todo app", "--source", "freeform"],
       p,
@@ -898,7 +898,7 @@ describe("t27 aidlc-utility detect-scope", () => {
 
   test("66: detect-scope rejects invalid scope (exit 1)", () => {
     const p = bareProj();
-    util(["intent-birth", "--scope", "bugfix"], p);
+    util(["intent-create", "--scope", "bugfix"], p);
     const r = util(["detect-scope", "--scope", "bogus", "--input", "x"], p);
     expect(r.status).toBe(1);
   }, 30000);
