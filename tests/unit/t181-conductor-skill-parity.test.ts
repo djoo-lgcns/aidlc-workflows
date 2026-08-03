@@ -16,7 +16,7 @@
 //   (a) NEGATIVE — the retired `/aidlc --init` command (a bare `--init` flag
 //       token; `git init`/`npm init` are NOT the aidlc command, same predicate as
 //       t174) must be ABSENT from every shipped conductor SKILL.
-//   (b) POSITIVE — the workspace-anchor vocabulary (`intent-birth`, `--repo`,
+//   (b) POSITIVE — the workspace-anchor vocabulary (`intent-create`, `--repo`,
 //       "offer a second intent", "intent and space verbs") must be PRESENT in
 //       every shipped conductor SKILL. Catches a future fork that drops `--init`
 //       yet still lacks the new verbs.
@@ -48,7 +48,7 @@ const BARE_INIT = /(^|[^-\w])--init\b/;
 
 // The workspace-anchor conductor vocabulary every shipped SKILL must define.
 const REQUIRED_TOKENS = [
-  "intent-birth", // run-then-continue birth verb (replaced `init`)
+  "intent-create", // run-then-continue birth verb (replaced `init`)
   "--repo", // multi-repo swarm prepare flag
   "offer a second intent", // P4-completion new-work conductor prose
   "intent and space verbs", // frontmatter utilities tail

@@ -1,7 +1,7 @@
 // t147-kiro-hook-adapter: the Kiro stdin shim normalizes live-captured
 // payloads into the core hooks' contract.
 //
-// covers: file:hooks/aidlc-stop.ts, file:hooks/aidlc-session-start.ts, file:hooks/aidlc-sync-statusline.ts, file:hooks/aidlc-log-subagent.ts
+// covers: file:hooks/aidlc-continue-workflow.ts, file:hooks/aidlc-session-start.ts, file:hooks/aidlc-sync-workflow-state.ts, file:hooks/aidlc-log-subagent.ts
 //
 // WHAT. Each case pipes a fixture from tests/fixtures/kiro-hook-payloads/
 // (field-verbatim captures off kiro-cli 2.6.1 — findings.md §0.2) into
@@ -34,7 +34,7 @@ import {
 import { hostname, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { birthIntent } from "../../core/tools/aidlc-lib.ts";
+import { createIntent } from "../../core/tools/aidlc-lib.ts";
 import {
   DEFAULT_RECORD_DIR,
   DEFAULT_SPACE,
@@ -153,7 +153,7 @@ function runDispatchCore(
 ): { stdout: string; stderr: string; code: number } {
   const r = spawnSync(
     "bun",
-    [join(projectDir, ".kiro", "hooks", "aidlc-dispatch-rules.ts")],
+    [join(projectDir, ".kiro", "hooks", "aidlc-deliver-stage-rules.ts")],
     {
       cwd: projectDir,
       input: JSON.stringify(payload),
@@ -173,7 +173,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
   test("1: stop blocks with a reason while the workflow has pending work", () => {
     const dir = scratchProject(true);
     try {
-      const r = runAdapter(dir, "stop", FIXTURES.stop);
+      const r = runAdapter(dir, "continue-workflow", FIXTURES.stop);
       expect(r.code).toBe(0);
       const out = JSON.parse(r.stdout) as { decision?: string; reason?: string };
       expect(out.decision).toBe("block");
@@ -186,7 +186,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
   test("2: stop is silent (no block) when no workflow state exists", () => {
     const dir = scratchProject(false);
     try {
-      const r = runAdapter(dir, "stop", FIXTURES.stop);
+      const r = runAdapter(dir, "continue-workflow", FIXTURES.stop);
       expect(r.code).toBe(0);
       expect(r.stdout.trim()).toBe("");
     } finally {
@@ -210,7 +210,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
     const dir = scratchProject(true);
     try {
       const before = readFileSync(seededStateFile(dir), "utf-8");
-      const r = runAdapter(dir, "state-sync", FIXTURES.postToolUse_todo_create);
+      const r = runAdapter(dir, "sync-workflow-state", FIXTURES.postToolUse_todo_create);
       expect(r.code).toBe(0);
       const after = readFileSync(seededStateFile(dir), "utf-8");
       // The fixture's [intent-capture] slug dispatches set-status; assert the
@@ -226,7 +226,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
   test("5: todo_list complete (no [slug] create) is a clean no-op", () => {
     const dir = scratchProject(true);
     try {
-      const r = runAdapter(dir, "state-sync", FIXTURES.postToolUse_todo_complete);
+      const r = runAdapter(dir, "sync-workflow-state", FIXTURES.postToolUse_todo_complete);
       expect(r.code).toBe(0);
       expect(r.stdout.trim()).toBe("");
     } finally {
@@ -288,7 +288,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
       // brief bundle is redundant defense there, not the delivery channel.
       const incomplete = runAdapter(
         dir,
-        "dispatch-rules",
+        "deliver-stage-rules",
         payload(basePrompt),
       );
       expect(incomplete.code, incomplete.stderr).toBe(0);
@@ -312,7 +312,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
       expect(exactPrompt).toContain("AIDLC_DISPATCH_RULES_BEGIN");
       const complete = runAdapter(
         dir,
-        "dispatch-rules",
+        "deliver-stage-rules",
         payload(exactPrompt),
       );
       expect(complete.code, complete.stderr).toBe(0);
@@ -342,7 +342,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
         `# Organization\n\n${"x".repeat(600_000)}\n`,
         "utf-8",
       );
-      const oversized = runAdapter(oversizedDir, "dispatch-rules", {
+      const oversized = runAdapter(oversizedDir, "deliver-stage-rules", {
         cwd: oversizedDir,
         tool_name: "subagent",
         tool_input: {
@@ -378,7 +378,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
           "org.md",
         ),
       );
-      const missing = runAdapter(missingDir, "dispatch-rules", {
+      const missing = runAdapter(missingDir, "deliver-stage-rules", {
         cwd: missingDir,
         tool_name: "subagent",
         tool_input: {
@@ -422,7 +422,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
   test("8: runtime-compile target accepts the alias shell payload and exits 0", () => {
     const dir = scratchProject(true);
     try {
-      const r = runAdapter(dir, "runtime-compile", FIXTURES.postToolUse_shell);
+      const r = runAdapter(dir, "rebuild-stage-graph", FIXTURES.postToolUse_shell);
       expect(r.code).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -438,7 +438,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
     // the forwarded session_id the core hook's `if (sessionId)` block is inert.
     const dir = scratchProject(true);
     try {
-      const born = birthIntent(dir, "kiro-stamp", "default");
+      const born = createIntent(dir, "kiro-stamp", "default");
       const sid = "kiro-session-abc123";
       const r = runAdapter(dir, "session-start", { ...(FIXTURES.agentSpawn as object), session_id: sid });
       expect(r.code).toBe(0);
@@ -461,7 +461,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
     const dir = scratchProject(true);
     try {
       const sid = "kiro-session-drift";
-      const a = birthIntent(dir, "intent-a", "default");
+      const a = createIntent(dir, "intent-a", "default");
       // First fire stamps the session to A (the live cursor at this point).
       const first = runAdapter(dir, "session-start", {
         ...(FIXTURES.agentSpawn as object),
@@ -472,7 +472,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
       const stampPath = join(dir, "aidlc", ".aidlc-sessions", sid);
       expect(readFileSync(stampPath, "utf-8").trim()).toBe(a.uuid);
       // Move the live cursor to B — a genuine drift A→B.
-      birthIntent(dir, "intent-b", "default");
+      createIntent(dir, "intent-b", "default");
       // Fire again with a resume-shaped payload. Because Kiro coerces to
       // startup, the core hook takes the STARTED path (re-stamps to B), never
       // the RESUMED offer path.
@@ -492,13 +492,13 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
     const dir = scratchProject(true);
     try {
       for (const target of [
-        "stop",
+        "continue-workflow",
         "session-start",
-        "state-sync",
+        "sync-workflow-state",
         "audit-and-sensors",
-        "runtime-compile",
+        "rebuild-stage-graph",
         "log-subagent",
-        "dispatch-rules",
+        "deliver-stage-rules",
       ]) {
         const r = runAdapter(dir, target, "{not json");
         expect(`${target}:${r.code}`).toBe(`${target}:0`);
@@ -513,7 +513,7 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
   // Kiro's stop adapter (case "stop", aidlc-kiro-adapter.ts:303-314) synthesizes
   // {hook_event_name:"Stop", stop_hook_active:false} with NO transcript_path. So
   // the core hook's conversational carve-out (tier 3) is structurally inert on
-  // Kiro: the RUN-MODE-AWARE no-progress cap (blockCap, aidlc-stop.ts:122-137) is
+  // Kiro: the RUN-MODE-AWARE no-progress cap (blockCap, aidlc-continue-workflow.ts:122-137) is
   // the ONLY release path for a chatting / pausing human. These two tests pin
   // that contract deterministically:
   //   - interactive (no autonomy field) -> cap 2: a 2nd identical no-progress
@@ -531,13 +531,13 @@ describe("t147 Kiro hook adapter (live-captured payload fixtures)", () => {
    *  test runner's environment (a leaked override would mask the contract). The
    *  adapter itself never sets the var (verified: aidlc-kiro-adapter.ts builds
    *  {hook_event_name,stop_hook_active} only), and the core hook reads it from
-   *  the inherited process env (aidlc-stop.ts:123). */
+   *  the inherited process env (aidlc-continue-workflow.ts:123). */
   function runStopNoCapEnv(projectDir: string): { stdout: string; code: number } {
     const env = { ...process.env, CLAUDE_PROJECT_DIR: projectDir };
     delete (env as Record<string, string | undefined>).CLAUDE_CODE_STOP_HOOK_BLOCK_CAP;
     const r = spawnSync(
       "bun",
-      [join(projectDir, ".kiro", "hooks", "aidlc-kiro-adapter.ts"), "stop"],
+      [join(projectDir, ".kiro", "hooks", "aidlc-kiro-adapter.ts"), "continue-workflow"],
       {
         cwd: projectDir,
         // The kiro adapter ignores stdin for the stop target (it synthesizes the

@@ -644,7 +644,7 @@ function sensorFireGate(artifact: string): GateResult {
   try {
     const birth = run(
       artifact,
-      ["intent", "birth", "--scope", "poc", "--label", "sensor-gate", "--project-dir", project],
+      ["intent", "create", "--scope", "poc", "--label", "sensor-gate", "--project-dir", project],
       { cwd: project, env: pathlessEnv(project), timeoutMs: 30_000 },
     );
     const outputPath = join(
@@ -717,7 +717,7 @@ function boltReentryGate(artifact: string): GateResult {
     const env = { ...pathlessEnv(), PATH: dirname(git) };
     const birth = run(
       artifact,
-      ["intent", "birth", "--scope", "poc", "--label", "bolt-gate", "--project-dir", projectArg],
+      ["intent", "create", "--scope", "poc", "--label", "bolt-gate", "--project-dir", projectArg],
       { cwd: invocationCwd, env, timeoutMs: 30_000 },
     );
     const worktree = run(
@@ -775,7 +775,7 @@ function swarmReentryGate(artifact: string): GateResult {
     const env = { ...pathlessEnv(), PATH: dirname(git) };
     const birth = run(
       artifact,
-      ["intent", "birth", "--scope", "poc", "--label", "swarm-gate", "--project-dir", projectArg],
+      ["intent", "create", "--scope", "poc", "--label", "swarm-gate", "--project-dir", projectArg],
       { cwd: invocationCwd, env, timeoutMs: 30_000 },
     );
     const result = run(
@@ -1095,7 +1095,7 @@ function routedProjectDirGate(artifact: string): GateResult {
       artifact,
       [
         "intent",
-        "birth",
+        "create",
         "--scope",
         "poc",
         "--label",

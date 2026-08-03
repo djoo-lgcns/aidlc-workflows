@@ -33,7 +33,7 @@ import {
   activeSpace,
   auditFilePath,
   auditShards,
-  birthIntent,
+  createIntent,
   composeMarkerPath,
   COMPOSE_MARKER_TTL_MS,
   DEFAULT_SPACE,
@@ -161,7 +161,7 @@ function die(msg: string): never {
 // aidlc-audit.ts VALID_EVENT_TYPES. Throws on invalid event or audit failure —
 // caller is expected to let that propagate (birth failures should stop birth).
 //
-// Lock-aware (mirrors aidlc-state.ts emitAudit): handleIntentBirth wraps the
+// Lock-aware (mirrors aidlc-state.ts emitAudit): handleIntentCreate wraps the
 // whole birth transaction in withAuditLock on the WORKSPACE sentinel bucket, so
 // this process already owns that OS lock. Routing through appendAuditEntry
 // (which calls the NON-reentrant acquireAuditLock keyed on the same sentinel
@@ -913,7 +913,7 @@ function handleStatus(projectDir: string, flags: Record<string, string>): void {
       `No active AI-DLC workflow found.
 
 To get started:
-  /aidlc "build the auth service"   Describe what to build (auto-births an intent)
+  /aidlc "build the auth service"   Describe what to build (creates an intent for you)
   /aidlc <scope>      Start a workflow by scope (e.g., /aidlc feature)
   /aidlc --help       Show all commands and scopes
 `
@@ -1163,7 +1163,7 @@ function handleDoctor(projectDir: string, flags: Record<string, string> = {}): v
       const raw = readFileSync(settingsForHooks, "utf-8");
       // jq-free: collect every distinct aidlc-*.ts basename referenced anywhere
       // in settings.json (hook command paths like
-      // "bun $CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-audit-logger.ts" and the
+      // "bun $CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-write-audit-log.ts" and the
       // statusLine command). Basename, not path, so the probe is dir-relative.
       const refs = new Set<string>();
       for (const m of raw.matchAll(/aidlc-[A-Za-z0-9_-]+\.ts/g)) {
@@ -1205,8 +1205,8 @@ function handleDoctor(projectDir: string, flags: Record<string, string> = {}): v
     // agents/aidlc.json / hooks.json — checked below). The core hook bodies
     // ship in every tree plus an authored adapter, so probe the explicit roster.
     const tsHooks = [
-      "aidlc-audit-logger",
-      "aidlc-sync-statusline",
+      "aidlc-write-audit-log",
+      "aidlc-sync-workflow-state",
       "aidlc-validate-state",
       "aidlc-log-subagent",
       "aidlc-session-start",
@@ -3381,7 +3381,7 @@ export function detectWorkspace(projectDir: string): ScanResult {
 }
 
 // ---------------------------------------------------------------------------
-// intent-birth (0.1-0.3) — deterministic: mint intent + scan + state-init
+// intent-create (0.1-0.3) — deterministic: mint intent + scan + state-init
 // ---------------------------------------------------------------------------
 
 // Deferred `git rm` of a migrated flat tree. migrateFlatLayout MOVED the data
@@ -3429,7 +3429,7 @@ function phasesWithExecuteStages(scope: string): Set<string> {
 // ships the shell). Creates the active intent's record dir plus a per-phase
 // artifact dir for each phase the SCOPE RUNS, AND the SPACE-level domain
 // knowledge/ dir (a sibling of intents, not a record subdir); all skipped if
-// already present. The active-intent cursor must be set (birthIntent/migration
+// already present. The active-intent cursor must be set (createIntent/migration
 // did so) before this runs.
 //
 // Scope-excluded phases get NO folder: an empty `operation/` in a bugfix record
@@ -3440,7 +3440,7 @@ function phasesWithExecuteStages(scope: string): Set<string> {
 // ever creates: an older record that already carries all five keeps them.
 function ensureWorkspaceDirs(projectDir: string, scope: string): void {
   // docsDir() default-resolves the active intent's record dir (or the flat
-  // fallback when no intent resolves) — the cursor set by birthIntent/migration
+  // fallback when no intent resolves) — the cursor set by createIntent/migration
   // points it at the born intent.
   const record = docsDir(projectDir);
   mkdirSync(record, { recursive: true });
@@ -3485,7 +3485,7 @@ function ensureWorkspaceDirs(projectDir: string, scope: string): void {
   repointHarnessIncludes(projectDir, activeSpace(projectDir));
 }
 
-// intent-birth — the deterministic mutation behind the engine's birth
+// intent-create — the deterministic mutation behind the engine's birth
 // directive (the engine NAMES the move read-only; this tool performs it).
 // Births the FIRST intent into the active space on a fresh workspace, OR a new
 // intent for new work alongside an active one. Crash-safe + concurrent-safe:
@@ -3502,7 +3502,7 @@ function ensureWorkspaceDirs(projectDir: string, scope: string): void {
 // the workflow to its first post-init stage — relocated here, now writing into
 // the BORN intent's record (the active-intent cursor set first makes the
 // default-resolving state/audit helpers resolve there).
-function handleIntentBirth(projectDir: string, flags: Record<string, string>): void {
+function handleIntentCreate(projectDir: string, flags: Record<string, string>): void {
   // Default when --scope is omitted; selection-aware so a plugin-only install
   // (where the core "poc" default is deselected) resolves to its nominated
   // freeform default instead of crashing with "Unknown scope".
@@ -3584,14 +3584,14 @@ function handleIntentBirth(projectDir: string, flags: Record<string, string>): v
     const slugSource = label || description || scope;
     const slug = slugify(slugSource, 24);
     // "help" is grammar (`intent help` prints help), so an intent slugged
-    // "help" would be unswitchable by name. birthIntent throws on it too
+    // "help" would be unswitchable by name. createIntent throws on it too
     // (library backstop); dying here keeps the clean JSON error shape.
     if (RESERVED_RECORD_NAMES.has(slug)) {
       die(
         `"${slug}" is a reserved name and cannot be an intent label. Pick a label that describes the work.`
       );
     }
-    birthIntent(projectDir, slug, activeSpace(projectDir), scope, repos);
+    createIntent(projectDir, slug, activeSpace(projectDir), scope, repos);
 
     const ts = isoTimestamp();
 
@@ -3670,15 +3670,15 @@ function handleIntentBirth(projectDir: string, flags: Record<string, string>): v
       Details: phaseDirDetail,
     });
 
-    handleIntentBirthStateBuild(projectDir, flags, scope, ts);
+    handleIntentCreateStateBuild(projectDir, flags, scope, ts);
   });
 }
 
 // The scope→stage state-build half of birth: the workspace detection + state
 // file authoring + routing audit emits the old --init ran after scaffolding.
-// Split out only so handleIntentBirth's lock body stays readable; it is called
+// Split out only so handleIntentCreate's lock body stays readable; it is called
 // from inside that lock (every write here resolves the born intent's record).
-function handleIntentBirthStateBuild(
+function handleIntentCreateStateBuild(
   projectDir: string,
   flags: Record<string, string>,
   scope: string,
@@ -3952,7 +3952,7 @@ ${stageProgress}
   }
 
   // Combined stdout summary (intent born + state-build). The active-intent
-  // cursor + the record dir were set by birthIntent above; the state file lives
+  // cursor + the record dir were set by createIntent above; the state file lives
   // under the born intent's record (resolved by writeStateFile's default).
   const bornDir = activeIntent(projectDir) ?? "(legacy flat record)";
   const submoduleWarningLine =
@@ -3981,7 +3981,7 @@ function handleInitTransition(): void {
 
 function handleStateInit(_projectDir: string, _flags: Record<string, string>): void {
   die(
-    "state-init is merged into intent-birth. A workflow starts by describing what to build (/aidlc \"build the auth service\"); the engine auto-births the intent."
+    "state-init is merged into intent-create. A workflow starts by describing what to build (/aidlc \"build the auth service\"); the engine creates the intent for you."
   );
 }
 
@@ -4069,8 +4069,8 @@ function handleIntent(projectDir: string, positional: string[], flags: Record<st
     printIntentListing(projectDir, asJson);
     return;
   }
-  if (verbOrTarget === "birth") {
-    handleIntentBirth(projectDir, flags);
+  if (verbOrTarget === "create") {
+    handleIntentCreate(projectDir, flags);
     return;
   }
   const target = verbOrTarget === "switch" ? positional[2] : verbOrTarget;
@@ -4255,7 +4255,7 @@ function handleDetect(projectDir: string, flags: Record<string, string>): void {
 // fresh empty team.md/project.md/phases stubs + the templates/ floor. A new team
 // starts at the framework baseline and earns its OWN practices — it does NOT
 // inherit another space's learnings. (A new INTENT, by contrast, seeds nothing:
-// it reads its space's live memory — handled in birthIntent.)
+// it reads its space's live memory — handled in createIntent.)
 function handleSpaceCreate(projectDir: string, positional: string[], _flags: Record<string, string>): void {
   const raw = positional[1];
   if (!raw) die("Usage: aidlc-utility space-create <name>");
@@ -5360,11 +5360,11 @@ export async function main(argv: string[]): Promise<void> {
   const subcommand = positional[0];
   errorProjectDirArg = flags["project-dir"];
   if (
-    (subcommand === "intent-birth" || subcommand === "init") &&
+    (subcommand === "intent-create" || subcommand === "init") &&
     (flags.help === "true" || rawArgs.includes("-h"))
   ) {
     process.stdout.write(
-      "Usage: aidlc-utility intent-birth --scope <scope> " +
+      "Usage: aidlc-utility intent-create --scope <scope> " +
         '[--arguments "<description>"] [--label "<short label>"] ' +
         "[--depth <level>] [--test-strategy <level>] [--repos <name,...>] " +
         "[--project-dir <path>]\n",
@@ -5386,8 +5386,8 @@ export async function main(argv: string[]): Promise<void> {
     case "doctor":
       handleDoctor(projectDir, flags);
       break;
-    case "intent-birth":
-      handleIntentBirth(projectDir, flags);
+    case "intent-create":
+      handleIntentCreate(projectDir, flags);
       break;
     case "intent":
       handleIntent(projectDir, positional, flags);
@@ -5421,7 +5421,7 @@ export async function main(argv: string[]): Promise<void> {
       break;
     // init / state-init are transition-only and intentionally absent from help.
     // Stale init callers get a loud error for this release; workflow start is
-    // still intent-birth through the orchestrator.
+    // still intent-create through the orchestrator.
     case "init":
       handleInitTransition();
       break;
@@ -5466,7 +5466,7 @@ export async function main(argv: string[]): Promise<void> {
       break;
     default:
       die(
-        `Usage: aidlc-utility <help|version|status|doctor|intent-birth|intent|space|space-create|codekb-path|detect|select-plugins|plugin-list|plugin-sync|recompose|scope-change|config-change|config-get|config-list|set-status|detect-scope|resolve-env-scope|scope-table|stage-table|upgrade> [--project-dir <path>] [--scope <scope>] [--json]`
+        `Usage: aidlc-utility <help|version|status|doctor|intent-create|intent|space|space-create|codekb-path|detect|select-plugins|plugin-list|plugin-sync|recompose|scope-change|config-change|config-get|config-list|set-status|detect-scope|resolve-env-scope|scope-table|stage-table|upgrade> [--project-dir <path>] [--scope <scope>] [--json]`
       );
   }
 }

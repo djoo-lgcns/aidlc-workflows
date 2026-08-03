@@ -195,7 +195,7 @@ code repo (each an immediate child directory with a `.git`), the birth step
 records the set of repos the intent touches in its `intents.json` row. By default
 it **auto-discovers** every sibling repo; to scope an intent to a specific subset,
 the birth tool accepts `--repos a,b` (a comma-separated list of repo directory
-names). These are flags of the deterministic `aidlc-utility intent-birth` step the
+names). These are flags of the deterministic `aidlc-utility intent-create` step the
 engine runs for you — not `/aidlc` flags you type. During Construction, each git
 operation (worktree, swarm, Bolt) targets one repo; the conductor passes
 `--repo <name>` to anchor it, required only when an intent spans more than one
@@ -282,8 +282,8 @@ When a workflow has issues, `--doctor` also prints a **Workflow diagnosis** sect
 
 ```
 ✓ bun installed (required for CLI tools and hooks)
-✓ aidlc-audit-logger.ts present
-✓ aidlc-sync-statusline.ts present
+✓ aidlc-write-audit-log.ts present
+✓ aidlc-sync-workflow-state.ts present
 ✓ aidlc-validate-state.ts present
 ✓ aidlc-log-subagent.ts present
 ✓ aidlc-session-start.ts present

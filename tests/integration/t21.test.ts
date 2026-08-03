@@ -1,4 +1,4 @@
-// covers: subcommand:aidlc-utility:intent-birth
+// covers: subcommand:aidlc-utility:intent-create
 //
 // t21.test.ts — SDK-harness port of tests/integration/t21-integration-init.sh
 // (plan 10). Drives a REAL workflow birth through the Claude Agent SDK and
@@ -8,8 +8,8 @@
 //
 // P4 MIGRATION. The user-facing `/aidlc --init` is RETIRED. A workflow STARTS by
 // naming a scope (or describing what to build); the engine NAMES the deterministic
-// `intent-birth` move and the conductor runs
-// `bun .claude/tools/aidlc-utility.ts intent-birth --scope <scope> ...`. Birth no
+// `intent-create` move and the conductor runs
+// `bun .claude/tools/aidlc-utility.ts intent-create --scope <scope> ...`. Birth no
 // longer scaffolds a flat aidlc-docs/ tree — it writes PER-INTENT: state at
 // aidlc/spaces/<space>/intents/<slug>-<id8>/aidlc-state.md, audit as per-clone
 // shards under <record>/audit/, and the per-phase artifact dirs under that
@@ -17,7 +17,7 @@
 // sibling of intents — not a record subdir.) The State-Version-7 template + the
 // birth audit events are
 // unchanged (birth still writes them) — only the LOCATION moved (per-intent) and
-// the dispatch verb (intent-birth, not init). This test resolves the born record
+// the dispatch verb (intent-create, not init). This test resolves the born record
 // via recordDirOf() (the proven pattern) and re-expresses every .sh assertion on
 // the per-intent surfaces.
 //
@@ -31,8 +31,8 @@
 // (t21b — the second-birth target — is a SEPARATE port.)
 //
 // THE DETERMINISTIC SURFACE. The conductor runs
-//   `bun .claude/tools/aidlc-utility.ts intent-birth --scope <scope> ...`
-// via Bash and prints its stdout VERBATIM. handleIntentBirth (aidlc-utility.ts:1986)
+//   `bun .claude/tools/aidlc-utility.ts intent-create --scope <scope> ...`
+// via Bash and prints its stdout VERBATIM. handleIntentCreate (aidlc-utility.ts:1986)
 // does the scan + state-init in one deterministic tool call, then writes the
 // per-intent aidlc-state.md (the State-Version-7 template) and appends a fixed
 // audit event sequence (per-clone shard). The Bash tool_result carries the birth
@@ -64,7 +64,7 @@
 //     assert the named events — a stronger statement of WHY the audit grew.
 //
 // Known-answer literals (read from the SHIPPED handler, not guessed):
-//   - birth dispatch:         engine NAMES `intent-birth --scope <scope>` (aidlc-orchestrate.ts:302), conductor runs it
+//   - birth dispatch:         engine NAMES `intent-create --scope <scope>` (aidlc-orchestrate.ts:302), conductor runs it
 //   - birth stdout anchors:   "Intent born:" / "State initialized:" / "Project type:" (utility.ts:2374-2382)
 //   - State Version value:    "7"  (birth template)
 //   - 3 new state fields:     Worktree Path / Bolt Refs / Practices Affirmed Timestamp

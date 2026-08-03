@@ -1,7 +1,7 @@
 // t149-codex-hook-adapter: the Codex stdin shim normalizes live-captured
 // payloads into the core hooks' contract.
 //
-// covers: file:hooks/aidlc-stop.ts, file:hooks/aidlc-session-start.ts, file:hooks/aidlc-sync-statusline.ts, file:hooks/aidlc-log-subagent.ts, file:hooks/aidlc-audit-logger.ts
+// covers: file:hooks/aidlc-continue-workflow.ts, file:hooks/aidlc-session-start.ts, file:hooks/aidlc-sync-workflow-state.ts, file:hooks/aidlc-log-subagent.ts, file:hooks/aidlc-write-audit-log.ts
 //
 // WHAT. Each case pipes a fixture from tests/fixtures/codex-hook-payloads/
 // (field-verbatim captures off Codex CLI 0.137.0 — the spike corpus at
@@ -45,7 +45,7 @@ import {
 import { hostname, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { birthIntent } from "../../core/tools/aidlc-lib.ts";
+import { createIntent } from "../../core/tools/aidlc-lib.ts";
 import {
   DEFAULT_RECORD_DIR,
   DEFAULT_SPACE,
@@ -191,7 +191,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
   test("1: stop blocks with a reason while the workflow has pending work (verbatim contract)", () => {
     const dir = scratchProject(true);
     try {
-      const r = runAdapter(dir, "stop", withCwd(FIXTURES.stop, dir));
+      const r = runAdapter(dir, "continue-workflow", withCwd(FIXTURES.stop, dir));
       expect(r.code).toBe(0);
       const out = JSON.parse(r.stdout) as { decision?: string; reason?: string };
       expect(out.decision).toBe("block");
@@ -206,7 +206,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
   test("2: stop is silent (no block) when no workflow state exists", () => {
     const dir = scratchProject(false);
     try {
-      const r = runAdapter(dir, "stop", withCwd(FIXTURES.stop, dir));
+      const r = runAdapter(dir, "continue-workflow", withCwd(FIXTURES.stop, dir));
       expect(r.code).toBe(0);
       expect(r.stdout.trim()).toBe("");
     } finally {
@@ -245,7 +245,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
         join(dir, "aidlc"),
         { recursive: true },
       );
-      const r = runAdapter(dir, "dispatch-rules", {
+      const r = runAdapter(dir, "deliver-stage-rules", {
         hook_event_name: "PreToolUse",
         cwd: dir,
         tool_name: "spawn_agent",
@@ -332,7 +332,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
     try {
       const r = runAdapter(
         dir,
-        "state-sync",
+        "sync-workflow-state",
         withCwd(FIXTURES.postToolUse_updatePlan_slug, dir),
       );
       expect(r.code).toBe(0);
@@ -347,7 +347,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
     const dir = scratchProject(true);
     try {
       const before = readFileSync(seededStateFile(dir), "utf-8");
-      const r = runAdapter(dir, "state-sync", withCwd(FIXTURES.postToolUse_updatePlan, dir));
+      const r = runAdapter(dir, "sync-workflow-state", withCwd(FIXTURES.postToolUse_updatePlan, dir));
       expect(r.code).toBe(0);
       const after = readFileSync(seededStateFile(dir), "utf-8");
       expect(after).toBe(before);
@@ -477,7 +477,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
     // and no stamp file appears.
     const dir = scratchProject(true);
     try {
-      const born = birthIntent(dir, "codex-rebind", "default");
+      const born = createIntent(dir, "codex-rebind", "default");
       const sid = String(FIXTURES.sessionStart.session_id);
       const r = runAdapter(dir, "session-start", withCwd(FIXTURES.sessionStart, dir));
       expect(r.code).toBe(0);
@@ -497,14 +497,14 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
     const dir = scratchProject(true);
     try {
       const sid = String(FIXTURES.sessionStart.session_id);
-      const a = birthIntent(dir, "intent-a", "default");
+      const a = createIntent(dir, "intent-a", "default");
       // Stamp the session to A via a startup fire (the core hook stamps the
       // live cursor's uuid — currently A).
       runAdapter(dir, "session-start", withCwd({ ...FIXTURES.sessionStart, source: "startup" }, dir));
       const stampPath = join(dir, "aidlc", ".aidlc-sessions", sid);
       expect(readFileSync(stampPath, "utf-8").trim()).toBe(a.uuid);
       // Move the live cursor to B (the drift the resume must detect).
-      birthIntent(dir, "intent-b", "default");
+      createIntent(dir, "intent-b", "default");
       const r = runAdapter(
         dir,
         "session-start",
@@ -526,12 +526,12 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
     const dir = scratchProject(true);
     try {
       for (const t of [
-        "stop",
+        "continue-workflow",
         "session-start",
         "audit-and-sensors",
-        "state-sync",
+        "sync-workflow-state",
         "log-subagent",
-        "dispatch-rules",
+        "deliver-stage-rules",
       ]) {
         const r = runAdapter(dir, t, "{not json");
         expect(r.code).toBe(0);
@@ -547,13 +547,13 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
   // Codex's stop adapter (case "stop", aidlc-codex-adapter.ts:336-343) pipes the
   // RAW stdin verbatim to the core hook, and Codex's stop payload carries a real
   // transcript_path (a date-sharded `rollout-*.jsonl`) + stop_hook_active. So the
-  // core hook's conversational carve-out (tier 3, aidlc-stop.ts:886-904) fires
+  // core hook's conversational carve-out (tier 3, aidlc-continue-workflow.ts:886-904) fires
   // from the actual transcript, classifying the ending turn:
   //   - human's last prompt answered with NO loop-advancing engine call -> ALLOW.
   //   - a loop-advancing aidlc-orchestrate call after that prompt -> BLOCK.
   //   - a READ-ONLY query (next --status) is NOT engagement -> still ALLOW.
   // The core hook detects the Codex format by the rollout-*.jsonl path shape
-  // (aidlc-stop.ts:792), so the transcript file the test writes MUST be named
+  // (aidlc-continue-workflow.ts:792), so the transcript file the test writes MUST be named
   // rollout-*.jsonl and live in the scratch dir (the adapter reads a REAL file).
   // The seeded brownfield-feature state (Current Stage requirements-analysis [-],
   // not [?]/[R], no questions file) yields a pending run-stage and trips none of
@@ -562,7 +562,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
 
   /** Write a Codex rollout transcript (response_item shape) and return its path.
    *  `assistant` is either a plain message turn or a function_call turn - the two
-   *  shapes the core hook's Codex reader classifies (aidlc-stop.ts:582-645). */
+   *  shapes the core hook's Codex reader classifies (aidlc-continue-workflow.ts:582-645). */
   function writeCodexTranscript(
     dir: string,
     humanPrompt: string,
@@ -620,7 +620,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
         kind: "message",
         text: "You are on requirements-analysis.",
       });
-      const r = runAdapter(dir, "stop", codexStopWithTranscript(dir, transcript));
+      const r = runAdapter(dir, "continue-workflow", codexStopWithTranscript(dir, transcript));
       expect(r.code).toBe(0);
       // Conversational ending turn -> ALLOW (silent, no decision:block).
       expect(r.stdout.trim()).toBe("");
@@ -637,7 +637,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
         name: "Bash",
         command: "bun .codex/tools/aidlc-orchestrate.ts next",
       });
-      const r = runAdapter(dir, "stop", codexStopWithTranscript(dir, transcript));
+      const r = runAdapter(dir, "continue-workflow", codexStopWithTranscript(dir, transcript));
       expect(r.code).toBe(0);
       const out = JSON.parse(r.stdout) as { decision?: string; reason?: string };
       // The conductor engaged the workflow then quit mid-loop -> still nudged.
@@ -656,7 +656,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
         name: "Bash",
         command: "bun .codex/tools/aidlc-orchestrate.ts next --status",
       });
-      const r = runAdapter(dir, "stop", codexStopWithTranscript(dir, transcript));
+      const r = runAdapter(dir, "continue-workflow", codexStopWithTranscript(dir, transcript));
       expect(r.code).toBe(0);
       // A read-only query does NOT engage the loop -> conversational ALLOW.
       expect(r.stdout.trim()).toBe("");

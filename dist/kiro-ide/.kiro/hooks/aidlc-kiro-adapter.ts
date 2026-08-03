@@ -178,7 +178,7 @@ hookDebug(projectDir, "kiro-adapter", "invoked", {
 // prompt in a project that never ran the framework does not scaffold audit
 // shards. Fail-open (try/catch, exit 0) so a mint failure never blocks the
 // human's turn.
-if (target === "mint") {
+if (target === "record-human-turn") {
   try {
     const pd = process.cwd();
     if (existsSync(stateFilePath(pd))) {
@@ -202,7 +202,7 @@ if (target === "mint") {
 // Construction (swarm/Bolt has no human at the gate) and the deterministic
 // off-switch. The IDE gives no cwd payload, so the project dir is process.cwd().
 // All read from disk. Fail-open on any read/parse error (advisory).
-if (target === "block") {
+if (target === "enforce-approval-gate") {
   try {
     const pd = process.cwd();
     const sp = stateFilePath(pd);
@@ -364,14 +364,14 @@ function buildForward(): Forward {
       };
     }
 
-    case "runtime-compile": {
+    case "rebuild-stage-graph": {
       // The IDE does not surface the shell command (toolResult is only
       // stdout+exit), so the command filter cannot run here. The
       // ide-audit-sync marker tells the core hook to skip the command filter
       // and gate purely on the audit tail (idempotent + cheap); its own
       // MEMORY_EMPTY emit is not in the transition regex (no recursion).
       return {
-        hook: "aidlc-runtime-compile.ts",
+        hook: "aidlc-rebuild-stage-graph.ts",
         input: {
           hook_event_name: "PostToolUse",
           tool_name: "Bash",
@@ -380,14 +380,14 @@ function buildForward(): Forward {
       };
     }
 
-    case "state-sync": {
+    case "sync-workflow-state": {
       // Payload-independent. The IDE gives no task payload (toolArgs is empty),
       // so instead of extracting a slug from the tool call, the core hook reads
       // the latest STAGE_STARTED slug from the audit tail and reconciles the
       // state file's Current Stage. The IDE_AUDIT_SYNC marker tells the core
       // hook to take that audit-tail path rather than parse a TaskUpdate.
       return {
-        hook: "aidlc-sync-statusline.ts",
+        hook: "aidlc-sync-workflow-state.ts",
         input: {
           hook_event_name: "PostToolUse",
           tool_name: "TaskUpdate",
@@ -457,12 +457,12 @@ function buildForward(): Forward {
       };
     }
 
-    case "stop":
+    case "continue-workflow":
       // Kiro provides no stop_hook_active signal; the core hook's own
       // 8-block no-progress ceiling is the loop guard (it defaults the flag
       // to false). The {"decision":"block"} stdout contract is identical.
       return {
-        hook: "aidlc-stop.ts",
+        hook: "aidlc-continue-workflow.ts",
         input: { hook_event_name: "Stop", stop_hook_active: false },
       };
 
@@ -507,8 +507,8 @@ hookDebug(projectDir, "kiro-adapter", "forward", {
 if (fwd.hook === "__audit_and_sensors__") {
   // Two core hooks ride the same write event, in audit-then-sensors order
   // (mirrors the Claude settings.json registration). Both advisory: exit 0.
-  runCore("aidlc-audit-logger.ts", fwd.input);
-  runCore("aidlc-sensor-fire.ts", fwd.input);
+  runCore("aidlc-write-audit-log.ts", fwd.input);
+  runCore("aidlc-run-sensors.ts", fwd.input);
   return 0;
 }
 
