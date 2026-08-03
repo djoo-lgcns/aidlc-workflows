@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.39] - 2026-08-03
+
+Under `Construction Iteration: unit-major`, code-generation now joins the per-unit walk: each Unit of Work is designed (3.1-3.4) and then BUILT (3.5) before the next unit begins, so the first working code lands after one unit's design instead of after every unit's. This completes the unit-major increment shipped in 2.2.13, which deferred code-generation ("widening the walk's block filter"). The stage-major default is unchanged and byte-identical. **Behaviour change for existing unit-major users:** a workflow with the knob set resumes onto the widened walk, and the autonomous Construction swarm no longer fires while the knob is set (the walk owns the build, serially in Bolt build order; unset the knob or use stage-major for parallel batch swarms).
+
+* Unit-major walk block widened from the four inline design stages to every per-unit Construction stage in graph order, code-generation included; per-stage approval gates are unchanged in count and machinery, cascading once the whole (stage x unit) grid, code-generation included, is covered.
+* Code Generation's per-unit Step 3 Plan Approval still hard-stops before generation, so a human sees each unit's design, plan, and code in sequence even though the stage-level gates come later.
+* Autonomous swarm emission is suppressed while `Construction Iteration: unit-major` is set: the walk's coverage signal is disk artifacts and the swarm's is convergence audit rows, and two owners would re-fan already-built units. The report-side settled-swarm approve exemption is untouched, so units a prior stage-major swarm built in worktrees still approve after the knob flips.
+* `delivery-planning` Step 7 classification, `stage-protocol.md`, the construction stage reference, and all five harness SKILL.md files updated to the widened semantics.
+
 ## [2.5.35] - 2026-08-03
 
 Reverse Engineering no longer silently discards a prior intent's code knowledge on rerun. The shared per-repository codekb now records and compares actual scan coverage before replacement, keeps full-root freshness checks stable, and resolves every repository before advancing a multi-repo stage. **Upgrade:** re-copy your `dist/<harness>/` shell into the project; existing stores predate scope tracking and report `UNKNOWN_SCOPE` until their first post-upgrade scan writes the new scope block.
