@@ -25,10 +25,10 @@
 //
 // Usage (registered in .kiro/agents/aidlc.json):
 //   bun .kiro/hooks/aidlc-kiro-adapter.ts <target>
-// where <target> ∈ session-start | audit-and-sensors | runtime-compile |
-//                  state-sync | log-subagent | stop | verb-intercept |
-//                  pretool-block | state-transition-guard | reviewer-scope
-//                  | dispatch-rules
+// where <target> ∈ session-start | audit-and-sensors | rebuild-stage-graph |
+//                  sync-workflow-state | log-subagent | continue-workflow |
+//                  verb-intercept | guard-tool-call | state-transition-guard |
+//                  reviewer-scope | deliver-stage-rules
 
 import {
   existsSync,
@@ -566,7 +566,7 @@ if (target === "reviewer-scope") {
   return 0;
 }
 
-// --- dispatch-rules: exact conductor-to-worker steering ---------------------
+// --- deliver-stage-rules: exact conductor-to-worker steering ---------------
 //
 // Kiro exposes subagent arguments to preToolUse hooks but does not support
 // updated tool input, and a block-with-retry contract deadlocks live: the
@@ -584,7 +584,7 @@ if (target === "deliver-stage-rules") {
   if ((kiro.tool_name ?? "") !== "subagent") return 0;
   const executable = process.env.AIDLC_COMPILED_EXECUTABLE;
   const command = executable
-    ? [executable, "hook", "dispatch-rules"]
+    ? [executable, "hook", "deliver-stage-rules"]
     : [process.execPath, join(HOOKS_DIR, "aidlc-deliver-stage-rules.ts")];
   const r = Bun.spawnSync(command, {
     stdin: Buffer.from(input, "utf-8"),
@@ -654,7 +654,7 @@ function buildForward(): Forward {
       };
 
     case "audit-and-sensors": {
-      // postToolUse(write) → audit-logger THEN sensor-fire (both ship core).
+      // postToolUse(write) → write-audit-log THEN run-sensors (both ship core).
       if (tool !== "Write") return null;
       const filePath = (ti.path as string) ?? (ti.file_path as string) ?? "";
       if (!filePath) return null;

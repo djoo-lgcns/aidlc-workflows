@@ -48,7 +48,7 @@ const projectDir = resolveProjectDirFromHook(import.meta.url);
 const SUBPROCESS_TIMEOUT_MS =
   Number(process.env.AIDLC_SENSOR_TIMEOUT_MS) || 90_000;
 
-// Health-dir for the heartbeat (sensor-fire.last). Read by the future
+// Health-dir for the heartbeat (run-sensors.last). Read by the future
 // hook-health doctor.
 const healthDir = hooksHealthDir(projectDir);
 

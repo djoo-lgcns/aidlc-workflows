@@ -376,7 +376,7 @@ function producesArtifactUnit(
 // false): the backstop only ever ADDS a reject it can prove happened; when the
 // evidence is absent it does nothing and the normal approve proceeds. Codekb
 // stages are covered via producesArtifactFile's codekb arm (their produces live
-// under codekb/<repo>/ with no <slug> subdir; the audit-logger hook logs those
+// under codekb/<repo>/ with no <slug> subdir; the write-audit-log hook logs those
 // writes). A non-empty intent repo set scopes that evidence to its own repos; an
 // empty legacy set retains the any-repo fallback described at the matcher. They
 // were previously excluded outright, which - combined with the hook not logging

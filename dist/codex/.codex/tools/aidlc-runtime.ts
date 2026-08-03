@@ -303,7 +303,7 @@ function computeBoltDag(projectDir: string): BoltDag | undefined {
   const parsed = parseBoltDag(body);
   if (!parsed.ok) {
     process.stderr.write(
-      `runtime-compile: unit-of-work-dependency.md edge block ${parsed.reason} ` +
+      `aidlc-runtime: unit-of-work-dependency.md edge block ${parsed.reason} ` +
         `(${parsed.detail}); bolt_dag node omitted\n`
     );
     return undefined;
@@ -320,7 +320,7 @@ function compile(opts: CompileOptions): { skipped?: string; written?: string } {
   const statePath = stateFilePath(projectDir);
   if (!existsSync(statePath)) {
     process.stderr.write(
-      "runtime-compile: no aidlc-state.md, skipping (likely pre-init)\n"
+      "aidlc-runtime: no aidlc-state.md, skipping (likely pre-init)\n"
     );
     return { skipped: "no-state" };
   }
@@ -596,13 +596,13 @@ function compile(opts: CompileOptions): { skipped?: string; written?: string } {
       const existing = terminalByFireId.get(fireId);
       if (existing && existing.ts >= ev.timestamp) {
         process.stderr.write(
-          `runtime-compile: duplicate terminal for Fire id ${fireId} (keeping latest-ts)\n`
+          `aidlc-runtime: duplicate terminal for Fire id ${fireId} (keeping latest-ts)\n`
         );
         continue;
       }
       if (existing) {
         process.stderr.write(
-          `runtime-compile: duplicate terminal for Fire id ${fireId} (keeping latest-ts)\n`
+          `aidlc-runtime: duplicate terminal for Fire id ${fireId} (keeping latest-ts)\n`
         );
       }
       terminalByFireId.set(fireId, {

@@ -10,7 +10,7 @@ This chapter documents the hook system architecture, all fourteen hook scripts, 
 
 This implementation uses fourteen hook scripts in `.claude/hooks/`. All fourteen are TypeScript (run via `bun`). All fourteen are **project-wide** — registered in `settings.json` (the statusline via the top-level `statusLine` key, the other thirteen via the `hooks` block), they fire regardless of which skill is active. They were previously split (six declared in `aidlc/SKILL.md` frontmatter as skill-scoped, the rest project-wide); v0.6.0 moved the skill-scoped six into `settings.json` so every entry point — the orchestrator, each packaged scope/stage runner, and any hand-written customer runner — inherits the deterministic spine with no per-runner `hooks:` block.
 
-Ten of the fourteen are **non-blocking**. Four are **flow-altering**: the `Stop` hook keeps the forwarding loop running, the dispatch-rules hook attaches exact active-stage rules to subagent briefs where the harness supports input rewriting, the reviewer-scope hook refuses sibling-unit reviewer access, and the state-transition guard refuses direct lifecycle calls that bypass `aidlc-orchestrate.ts report`.
+Ten of the fourteen are **non-blocking**. Four are **flow-altering**: the `Stop` hook keeps the forwarding loop running, the deliver-stage-rules hook attaches exact active-stage rules to subagent briefs where the harness supports input rewriting, the reviewer-scope hook refuses sibling-unit reviewer access, and the state-transition guard refuses direct lifecycle calls that bypass `aidlc-orchestrate.ts report`.
 
 ```
 .claude/hooks/

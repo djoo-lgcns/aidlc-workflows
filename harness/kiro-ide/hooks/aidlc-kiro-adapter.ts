@@ -36,7 +36,7 @@
 //   - audit-and-sensors: scrape the written file path from toolResult prose
 //     (strict patterns, fail-open) and feed the core hooks the Claude-shaped
 //     {tool_input:{file_path}}.
-//   - runtime-compile: the command is unrecoverable, so drop the command
+//   - rebuild-stage-graph: the command is unrecoverable, so drop the command
 //     filter and always forward — the core hook self-gates on the audit tail.
 //   - state-sync: payload-independent — the core hook reads the latest
 //     STAGE_STARTED slug from the audit tail (no task payload needed).
@@ -52,8 +52,9 @@
 // Usage (registered in .kiro/hooks/aidlc-*.json — the IDE's v2 hook schema,
 // {"version":"v1","hooks":[{name,trigger,matcher,action}]}):
 //   bun .kiro/hooks/aidlc-kiro-adapter.ts <target>
-// where <target> ∈ mint | block | session-start | audit-and-sensors |
-//                  runtime-compile | state-sync | log-subagent | stop |
+// where <target> ∈ record-human-turn | enforce-approval-gate | session-start |
+//                  audit-and-sensors | rebuild-stage-graph |
+//                  sync-workflow-state | log-subagent | continue-workflow |
 //                  session-end
 
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -102,7 +103,7 @@ export async function run(
 ): Promise<number> {
 // LOAD-BEARING (not debug-only): this is the base dir for resolve(projectDir,
 // rawPath) that turns the IDE's workspace-relative write path into the absolute
-// path the core audit-logger's record-root check needs — the core fix of this
+// path the core write-audit-log's record-root check needs — the core fix of this
 // harness. It also feeds hookDebug/recordHookDrop. Do not remove it.
 const projectDir = resolveProjectDirFromHook(import.meta.url);
 
@@ -250,7 +251,7 @@ function extractWrittenPath(toolResult: string): string {
 
 // Map the IDE tool name to the canonical name the core hooks match on. Write
 // creates a (possibly new) file; str_replace/fs_append always target an
-// existing file → Edit (forces ARTIFACT_UPDATED in the core audit-logger).
+// existing file → Edit (forces ARTIFACT_UPDATED in the core write-audit-log).
 function canonicalWriteTool(name: string): "Write" | "Edit" | "" {
   if (name === "fs_write") return "Write";
   if (name === "str_replace" || name === "fs_append") return "Edit";
@@ -307,7 +308,7 @@ function buildForward(): Forward {
       };
 
     case "audit-and-sensors": {
-      // postToolUse(write) → audit-logger THEN sensor-fire (both ship core).
+      // postToolUse(write) → write-audit-log THEN run-sensors (both ship core).
       // Captured PostToolUse write inputs are empty, so the file path comes
       // from the toolResult prose.
       //

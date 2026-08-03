@@ -1593,7 +1593,7 @@ function handleDoctor(projectDir: string, flags: Record<string, string> = {}): v
   // "not yet fired" (state a), not drift (state b). Besides the `.last`
   // heartbeats, the dir may hold purely-diagnostic files that no hook firing
   // produced: `hook-debug.log` (written by hookDebug under AIDLC_HOOK_DEBUG) and
-  // `.first-fired` (the sensor-fire banner marker). If ONLY those exist, treat
+  // `.first-fired` (the run-sensors banner marker). If ONLY those exist, treat
   // it as fresh — otherwise enabling AIDLC_HOOK_DEBUG on a fresh install would
   // flip this check from PASS to a false drift FAIL for exactly the user trying
   // to diagnose hooks.
@@ -4881,7 +4881,7 @@ function handleSetStatus(projectDir: string, flags: Record<string, string>): voi
     process.env.AIDLC_STATUSLINE_OWNER !== `statusline:${process.ppid}`
   ) {
     die(
-      "Direct aidlc-utility set-status is blocked: status synchronization is owned by the sync-statusline hook.",
+      "Direct aidlc-utility set-status is blocked: status synchronization is owned by the sync-workflow-state hook.",
     );
   }
   const sp = stateFilePath(projectDir, flags.intent, flags.space);
