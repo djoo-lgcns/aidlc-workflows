@@ -961,7 +961,7 @@ If the `run-stage` directive includes a `reviewer` field (non-null), the orchest
    - The stage definition file path (`directive.stage_file`)
    - The Q&A file path (e.g., `<record>/<phase>/<stage>/<stage>-questions.md`)
    - All artifact file paths produced by the stage (the `produces` artifacts)
-   - For a per-unit stage (`directive.unit` present), also the resolved paths in `directive.consumes` (all upstream artifacts the stage declares, including the shared inception contracts that pin cross-unit boundaries - `components.md`, `component-methods.md`, `services.md`, `unit-of-work.md` - paths only, per the context-budget rule)
+   - For a per-unit stage (`directive.unit` present), also the resolved paths in `directive.consumes` (all upstream artifacts the stage declares, including the shared inception contracts that pin cross-unit boundaries - `components.md`, `contract-summary.md`, `unit-of-work.md` - paths only, per the context-budget rule)
    - The validation tools list from the stage definition's frontmatter (if any)
 
    Do NOT pass: `memory.md` (builder's diary) or any plan/reasoning files. The reviewer forms independent judgment.

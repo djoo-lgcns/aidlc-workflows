@@ -167,15 +167,15 @@ describe("t31 aidlc-utility help — CLI contract (migrated from t31-help-text-c
   }
 
   // --- Stage-count semantics (compiled from scope-mapping.json EXECUTE/Total). ---
-  test("enterprise/feature shows 'All 32 stages'", () => {
+  test("enterprise/feature shows 'All 33 stages'", () => {
     // execute === total -> "All <total> stages" (aidlc-utility.ts:156-157).
-    expect(HELP.stdout).toContain("All 32 stages");
+    expect(HELP.stdout).toContain("All 33 stages");
   });
 
-  test("bugfix shows compiled '7 of 32 stages' count", () => {
+  test("bugfix shows compiled '7 of 33 stages' count", () => {
     // execute !== total -> "<execute> of <total> stages"; bugfix tallies 7
     // EXECUTE of 32 (was the stale "~8 stages" pre-milestone-10).
-    expect(HELP.stdout).toContain("7 of 32 stages");
+    expect(HELP.stdout).toContain("7 of 33 stages");
   });
 
   test("feature row shows '(default)' marker", () => {

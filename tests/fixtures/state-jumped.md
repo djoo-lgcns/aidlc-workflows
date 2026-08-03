@@ -62,7 +62,7 @@
 - [S] requirements-analysis — EXECUTE
 - [S] user-stories — EXECUTE
 - [S] refined-mockups — EXECUTE
-- [S] application-design — EXECUTE
+- [S] domain-design — EXECUTE
 - [S] units-generation — EXECUTE
 - [S] delivery-planning — EXECUTE
 

@@ -155,9 +155,10 @@ flowchart TD
     S22["2.3 Requirements Analysis\n(aidlc-product-agent)"]
     S23["2.4 User Stories\n(aidlc-product-agent)"]
     S24["2.5 Refined Mockups\n(aidlc-design-agent)"]
-    S25["2.6 Application Design\n(aidlc-architect-agent)"]
+    S25["2.6 Domain Design\n(aidlc-architect-agent)"]
     S26["2.7 Units Generation\n(aidlc-architect-agent)"]
-    S27["2.8 Delivery Planning\n(aidlc-delivery-agent)"]
+    S28["2.8 Contract Design\n(aidlc-architect-agent)"]
+    S27["2.9 Delivery Planning\n(aidlc-delivery-agent)"]
     VG2{{"Verification Gate:\nInception → Construction"}}
 
     BF_CHECK{"Brownfield?\n(from Initialization 0.3)"}
@@ -182,7 +183,9 @@ flowchart TD
     S24 -.->|CONDITIONAL| S25
     S25 -.->|"if in scope"| S26
     S22 -.->|"if 2.6 skipped"| S26
+    S26 -.->|"if multi-unit"| S28
     S26 ==>|ALWAYS| S27
+    S28 -.->|CONDITIONAL| S27
     S27 ==>|ALWAYS| VG2
 
     style S21 fill:#bbdefb,stroke:#1565c0
@@ -193,11 +196,12 @@ flowchart TD
     style S23 fill:#fff9c4,stroke:#f9a825
     style S24 fill:#fff9c4,stroke:#f9a825
     style S25 fill:#fff9c4,stroke:#f9a825
+    style S28 fill:#fff9c4,stroke:#f9a825
     style VG2 fill:#ef9a9a,stroke:#c62828
     style RE_DETAIL fill:#e8eaf6,stroke:#3f51b5
 ```
 
-<!-- Text fallback: Brownfield check (from stage 0.3). If yes, 2.1 Reverse Engineering runs as a two-link pipeline (developer code scan then architect synthesis-and-write). Then 2.2 Practices Discovery runs as a hub-and-spoke on every included scope (lead draft, mutually blind quality/developer/devsecops spokes, human interview, lead integration) and promotes affirmed work to active-space memory. Next are 2.3 Requirements Analysis (ALWAYS), optional 2.4 User Stories mob, optional 2.5 Refined Mockups, optional 2.6 Application Design, 2.7 Units Generation (ALWAYS), and 2.8 Delivery Planning (ALWAYS), followed by Verification Gate 2. -->
+<!-- Text fallback: Brownfield check (from stage 0.3). If yes, 2.1 Reverse Engineering runs as a two-link pipeline (developer code scan then architect synthesis-and-write). Then 2.2 Practices Discovery runs as a hub-and-spoke on every included scope (lead draft, mutually blind quality/developer/devsecops spokes, human interview, lead integration) and promotes affirmed work to active-space memory. Next are 2.3 Requirements Analysis (ALWAYS), optional 2.4 User Stories mob, optional 2.5 Refined Mockups, optional 2.6 Domain Design, 2.7 Units Generation (ALWAYS), optional 2.8 Contract Design (multi-unit), and 2.9 Delivery Planning (ALWAYS), followed by Verification Gate 2. -->
 
 | # | Stage | Lead | Supporting | Key Artifacts | Condition |
 |---|-------|------|-----------|---------------|-----------|
@@ -206,9 +210,10 @@ flowchart TD
 | 2.3 | Requirements Analysis | aidlc-product-agent | — | `requirements.md` | ALWAYS |
 | 2.4 | User Stories | aidlc-product-agent | aidlc-design-agent, aidlc-developer-agent, aidlc-quality-agent | `stories.md`, `personas.md` | User-facing features |
 | 2.5 | Refined Mockups | aidlc-design-agent | aidlc-product-agent | Hi-fi mockups, interaction spec | UI projects |
-| 2.6 | Application Design | aidlc-architect-agent | aidlc-aws-platform-agent, aidlc-design-agent | App design artifacts, ADRs | Per execution plan |
+| 2.6 | Domain Design | aidlc-architect-agent | aidlc-aws-platform-agent, aidlc-design-agent | `components.md` (component catalogue) | Per execution plan |
 | 2.7 | Units Generation | aidlc-architect-agent | aidlc-delivery-agent | `unit-of-work.md`, `unit-of-work-dependency.md` (DAG), `unit-of-work-story-map.md` | ALWAYS |
-| 2.8 | Delivery Planning | aidlc-delivery-agent | aidlc-architect-agent | `bolt-plan.md`, `team-allocation.md`, `risk-and-sequencing-rationale.md`, `external-dependency-map.md` | ALWAYS |
+| 2.8 | Contract Design | aidlc-architect-agent | aidlc-aws-platform-agent | `contract-summary.md` (inter-unit contracts) | Multi-unit systems |
+| 2.9 | Delivery Planning | aidlc-delivery-agent | aidlc-architect-agent | `bolt-plan.md`, `team-allocation.md`, `risk-and-sequencing-rationale.md`, `external-dependency-map.md` | ALWAYS |
 
 **Key behavior:** Stage 2.1 runs as a **pipeline** (2-link chain) — first an aidlc-developer-agent code scan, then an aidlc-architect-agent synthesis that writes the artifacts. It only executes for brownfield projects. Stage 2.2 runs as a **subagent hub-and-spoke** for greenfield and brownfield work: the lead drafts, quality/developer/devsecops inspect it independently, the human interview resolves gaps, and the lead integrates. Stage 2.4 runs as a **mob** — the lead drafts, and the design, developer, and quality agents contribute in parallel via contribution files.
 
@@ -320,7 +325,7 @@ Failures always stop Construction, even in autonomous mode. That's the one place
 
 | # | Stage | Lead | Supporting | Key Artifacts | Runs |
 |---|-------|------|-----------|---------------|------|
-| 3.1 | Functional Design | aidlc-architect-agent | aidlc-developer-agent | `business-logic-model.md`, `business-rules.md` | Per Bolt (CONDITIONAL by execution plan) |
+| 3.1 | Functional Design | aidlc-architect-agent | aidlc-developer-agent | `entities.md`, `rules.md`, `functional-spec.md` | Per Bolt (CONDITIONAL by execution plan) |
 | 3.2 | NFR Requirements | aidlc-architect-agent | aidlc-devsecops-agent, aidlc-compliance-agent, aidlc-quality-agent | Security, performance, reliability NFRs | Per Bolt (CONDITIONAL) |
 | 3.3 | NFR Design | aidlc-architect-agent | aidlc-aws-platform-agent | NFR design specifications | Per Bolt (CONDITIONAL) |
 | 3.4 | Infrastructure Design | aidlc-aws-platform-agent | aidlc-devsecops-agent, aidlc-compliance-agent | Infrastructure specifications, IaC designs | Per Bolt (CONDITIONAL) |

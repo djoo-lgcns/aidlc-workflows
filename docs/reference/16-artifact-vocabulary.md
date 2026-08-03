@@ -150,20 +150,20 @@ wire identifier, not the filename.
 Artifacts live on disk at paths that are derivable from `(canonical
 name) + (producing stage) + (per-unit flag)`. Two shapes today:
 
-- **Non-per-unit stages (24 of 29):**
+- **Non-per-unit stages (25 of 30):**
   `<record>/<phase>/<stage>/<canonical-name>.md`
   Example: `feasibility-assessment` (produced by the Ideation
   `feasibility` stage) lives at
   `<record>/ideation/feasibility/feasibility-assessment.md`.
 
-- **Per-unit Construction stages (5 of 29):** `nfr-requirements`,
+- **Per-unit Construction stages (5 of 30):** `nfr-requirements`,
   `nfr-design`, `functional-design`, `infrastructure-design`, and
   `code-generation`. These emit one copy of each artifact per Unit of
   Work during Construction:
   `<record>/construction/{unit-name}/<stage>/<canonical-name>.md`
-  Example: `business-logic-model` (produced by `functional-design`) lives
+  Example: `functional-spec` (produced by `functional-design`) lives
   at
-  `<record>/construction/{unit-name}/functional-design/business-logic-model.md`.
+  `<record>/construction/{unit-name}/functional-design/functional-spec.md`.
 
 Per-unit status is declared by the stage's `for_each: unit-of-work`
 frontmatter field — the five Construction stages that run once per Unit carry
@@ -200,8 +200,8 @@ bun dist/claude/.claude/tools/aidlc-graph.ts artifacts
 Prints one canonical name per line, alphabetically sorted.
 
 Pre-PR-8 output is empty — stages haven't migrated to YAML yet and
-`produces:` isn't populated. Post-PR-8 the output grows to roughly 118
-names across 29 non-initialisation stages.
+`produces:` isn't populated. Post-PR-8 the output grows to roughly 119
+names across 30 non-initialisation stages.
 
 Pipe through `wc -l` for a count, `grep` for a filter, or `diff` against
 an expected baseline for a drift check.

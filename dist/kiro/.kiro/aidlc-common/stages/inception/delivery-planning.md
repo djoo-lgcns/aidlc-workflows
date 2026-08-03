@@ -60,7 +60,7 @@ Load aidlc-architect-agent for build order validation.
 Read all Inception phase artifacts:
 - Requirements from `<record>/inception/requirements-analysis/`
 - User stories from `<record>/inception/user-stories/`
-- Application design from `<record>/inception/application-design/`
+- Domain design (component catalogue) from `<record>/inception/domain-design/components.md`
 - Units from `<record>/inception/units-generation/`
 - Team formation from `<record>/ideation/team-formation/` (if exists)
 

@@ -250,7 +250,7 @@ When a state file is detected, the orchestrator presents four options. The condu
 | IDEATION (1.1-1.7) | `<record>/ideation/` artifacts completed so far + guardrails |
 | INCEPTION -- RE stages | `aidlc/spaces/<active-space>/codekb/<repo>/` + ideation artifacts |
 | INCEPTION -- Requirements stages | Per-repo `codekb/` artifacts (if performed) + requirements artifacts |
-| INCEPTION -- Design stages | Requirements + user stories + application design artifacts |
+| INCEPTION -- Design stages | Requirements + user stories + domain design artifacts |
 | INCEPTION -- Delivery Planning | All inception artifacts |
 | CONSTRUCTION -- Code Generation | Design artifacts for the current unit + story design + acceptance criteria + prior code |
 | CONSTRUCTION -- Build/Test | Code outputs for the current unit + test plans + build configuration |
@@ -603,9 +603,9 @@ The following intentional differences from the upstream `aidlc-workflows/` refer
 |---|-----------|-----------|----------------|-----------|
 | 1 | NFR artifact granularity | 2 files each | 5 NFR Requirements + 5 NFR Design files | Finer granularity improves traceability |
 | 2 | Plan/question file co-location | Flat centralized pattern | Co-located with stage artifacts | Improves discoverability |
-| 3 | Infrastructure Design expansion | 2-3 files | 5 files (+monitoring-design.md, +cicd-pipeline.md) | Operational visibility |
+| 3 | Infrastructure Design consolidation | 2-3 files | 3 files: consolidated `infrastructure-specification.md` (deployment + services + shared) + dedicated `monitoring-design.md` + `cicd-pipeline.md` | Tabular infra spec; monitoring/CICD stay separate for Operation-stage consumers |
 | 4 | Inline questions | All questions in files | `AskUserQuestion` for 1-3 simple options | Claude Code's structured UI |
-| 5 | Architecture Decision Records | Not present | `decisions.md` in Application Design | Architectural traceability |
+| 5 | Architecture Decision Records | Not present | Rationale/Alternatives-Rejected captured in `components.md` (Domain Design) | Architectural traceability |
 | 6 | Welcome message | Longer Unicode-based | Shorter, ASCII-safe; rendered via `companyAnnouncements` in `settings.json` (not a stage) | Fixes reference's own ascii-diagram-standards violation |
 | 7 | RE rerun guard | Uses cached artifacts | Verifies scope/fingerprint, then offers reuse or rescan | Prevents stale or silently narrower analysis |
 | 8 | Session resume | File-based `[Answer]:` tag | Uses `AskUserQuestion` | More natural in Claude Code |
@@ -695,7 +695,7 @@ Complete reference of all 32 stages with execution metadata. The welcome message
 | 2.3 | Requirements Analysis | Inception | ALWAYS | aidlc-product-agent | -- | inline |
 | 2.4 | User Stories | Inception | CONDITIONAL | aidlc-product-agent | aidlc-design-agent, aidlc-developer-agent, aidlc-quality-agent | mob |
 | 2.5 | Refined Mockups | Inception | CONDITIONAL | aidlc-design-agent | aidlc-product-agent | inline |
-| 2.6 | Application Design | Inception | CONDITIONAL | aidlc-architect-agent | aidlc-aws-platform-agent, aidlc-design-agent | inline |
+| 2.6 | Domain Design | Inception | CONDITIONAL | aidlc-architect-agent | aidlc-aws-platform-agent, aidlc-design-agent | inline |
 | 2.7 | Units Generation | Inception | ALWAYS | aidlc-architect-agent | aidlc-delivery-agent | inline |
 | 2.8 | Delivery Planning | Inception | ALWAYS | aidlc-delivery-agent | aidlc-architect-agent | inline |
 | 3.1 | Functional Design | Construction | CONDITIONAL | aidlc-architect-agent | aidlc-developer-agent | inline |

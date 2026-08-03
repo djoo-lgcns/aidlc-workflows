@@ -53,8 +53,7 @@ describe("t217 reviewer read-scope bound is stated on every surface", () => {
     expect(body).toMatch(/Your scope is.*artifacts.*shared contracts/i);
     // Checklist item is rewritten to name the shared contracts, not a sibling-directory sweep.
     expect(body).toContain("components.md");
-    expect(body).toContain("component-methods.md");
-    expect(body).toContain("services.md");
+    expect(body).toContain("contract-summary.md");
     expect(body).toContain("unit-of-work.md");
     // Old bare checklist line is gone.
     expect(body).not.toMatch(/^- Cross-unit contract boundaries respected\?$/m);

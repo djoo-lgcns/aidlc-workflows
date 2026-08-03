@@ -83,9 +83,10 @@ Stage 2.2, and the User Stories mob at Stage 2.4.
 | 2.3   | Requirements Analysis  | ALWAYS      | aidlc-product-agent          | --                                                   | inline                           |
 | 2.4   | User Stories           | CONDITIONAL | aidlc-product-agent          | aidlc-design-agent, aidlc-developer-agent, aidlc-quality-agent | mob                              |
 | 2.5   | Refined Mockups        | CONDITIONAL | aidlc-design-agent           | aidlc-product-agent                                        | inline                           |
-| 2.6   | Application Design     | CONDITIONAL | aidlc-architect-agent        | aidlc-aws-platform-agent, aidlc-design-agent               | inline                           |
+| 2.6   | Domain Design     | CONDITIONAL | aidlc-architect-agent        | aidlc-aws-platform-agent, aidlc-design-agent               | inline                           |
 | 2.7   | Units Generation       | ALWAYS      | aidlc-architect-agent        | aidlc-delivery-agent                                       | inline                           |
-| 2.8   | Delivery Planning      | ALWAYS      | aidlc-delivery-agent         | aidlc-architect-agent                                      | inline                           |
+| 2.8   | Contract Design        | CONDITIONAL | aidlc-architect-agent        | aidlc-aws-platform-agent                                   | inline                           |
+| 2.9   | Delivery Planning      | ALWAYS      | aidlc-delivery-agent         | aidlc-architect-agent                                      | inline                           |
 
 ---
 
@@ -208,7 +209,7 @@ Standard 2-option gate: **Approve** (continue to Requirements Analysis) /
   essential.
 - For security-patch scope, this stage executes to find vulnerability context.
 - The 9 artifacts produced here are consumed by Requirements Analysis (2.3),
-  User Stories (2.4), Application Design (2.6), and Units Generation (2.7).
+  User Stories (2.4), Domain Design (2.6), and Units Generation (2.7).
 - The `architecture.md` artifact must include Interaction Diagrams showing how
   business transactions are implemented across components, using sequence or
   flow diagrams.
@@ -493,7 +494,7 @@ Conditional gate format:
 - For bugfix scope, this stage captures the bug description at minimal depth.
 - For infra scope, this stage captures infrastructure requirements.
 - The requirements document produced here is consumed by User Stories (2.4),
-  Refined Mockups (2.5), Application Design (2.6), Units Generation (2.7),
+  Refined Mockups (2.5), Domain Design (2.6), Units Generation (2.7),
   and Delivery Planning (2.8).
 
 ---
@@ -764,14 +765,14 @@ Standard 2-option gate: **Approve** / **Request Changes**.
 - Skip condition: non-UI, API-only, or infrastructure-only initiatives. Also
   typically skipped if Stage 1.6 (Rough Mockups) was skipped.
 - For mvp scope, this stage executes only if the project has UI.
-- The mockups produced here feed into Application Design (2.6) and ultimately
+- The mockups produced here feed into Domain Design (2.6) and ultimately
   into Construction's Code Generation (3.5) for UI components.
 - The accessibility checklist provides testable criteria that feed into Build
   and Test (3.6).
 
 ---
 
-## Stage 2.6: Application Design
+## Stage 2.6: Domain Design
 
 ### Metadata
 
@@ -787,18 +788,16 @@ Standard 2-option gate: **Approve** / **Request Changes**.
 
 ### Purpose
 
-Application Design defines the system architecture for the project: component
-boundaries, interfaces, service definitions, communication patterns, dependency
-relationships, and architecture decision records (ADRs). It translates
-requirements and user stories into a concrete technical design that guides
-Construction.
+Domain Design identifies the **logical building blocks** of the system — the
+components you write code for. A component is a bounded piece of software with
+its own business logic, entities, and lifecycle (code you write, not
+infrastructure you deploy). This stage captures each component's behaviour,
+its dependencies and dependents, and the entities it owns, plus the rationale
+for each boundary. It does NOT decide deployment topology (that is Units
+Generation) or tech stack / NFR patterns (later stages).
 
-The aidlc-aws-platform-agent provides supporting perspective on AWS service mapping.
-The aidlc-design-agent support is also noted in SKILL.md's Deliberate Deviations
-section for UX-informed architecture.
-
-The `decisions.md` artifact (ADRs) is a deliberate addition not present in the
-upstream reference, documented in SKILL.md's "Deliberate Deviations" section.
+The aidlc-aws-platform-agent provides supporting perspective on managed-service
+dependencies; the aidlc-design-agent contributes UI component structure.
 
 ### Inputs
 
@@ -821,7 +820,7 @@ upstream reference, documented in SKILL.md's "Deliberate Deviations" section.
    `<record>/aidlc-state.md`.
 
 3. **Create Design Plan with Questions** -- Create
-   `<record>/inception/application-design/application-design-questions.md`
+   `<record>/inception/domain-design/domain-design-questions.md`
    with context-appropriate questions using `[Answer]:` tag format covering:
    - Component boundary decisions
    - Architectural style preferences (if not already decided)
@@ -837,8 +836,10 @@ upstream reference, documented in SKILL.md's "Deliberate Deviations" section.
    scan for vague language, contradictions, missing details. Create follow-up
    questions if ANY ambiguity found. Resolve all ambiguities before proceeding.
 
-5. **Generate Design Artifacts** -- Create 5 design artifacts (see Outputs
-   below).
+5. **Generate the Component Catalogue** -- Create the single consolidated
+   `components.md` (see Outputs below): a fenced `yaml` catalogue (source of
+   truth) plus the derived human view (mermaid diagram + summary/ownership/
+   rationale tables).
 
 6. **Prepare Completion** -- Verify the design artifacts. Do not edit state;
    report the gate outcome through `aidlc-orchestrate.ts`.
@@ -853,21 +854,17 @@ upstream reference, documented in SKILL.md's "Deliberate Deviations" section.
 
 ### Outputs
 
-All 5 artifacts written to `<record>/inception/application-design/`:
+A single consolidated artifact written to `<record>/inception/domain-design/`:
 
 | File                              | Contents                                                  |
 |-----------------------------------|-----------------------------------------------------------|
-| `components.md`                   | Component names, purposes, responsibilities, interfaces, boundaries, ownership |
-| `component-methods.md`            | Method signatures for each component's public interface, input/output types, error handling approach (detailed business rules belong in Functional Design) |
-| `services.md`                     | Service definitions, responsibilities, orchestration patterns (choreography vs. orchestration), communication contracts, lifecycle and scaling characteristics |
-| `component-dependency.md`         | Dependency matrix, communication patterns (sync/async/event-driven), data flow between components, shared resource identification |
-| `decisions.md`                    | Architecture Decision Records (ADRs) with Context, Decision, Consequences, Alternatives Considered; trade-off analysis; reversibility assessment |
+| `components.md`                   | Fenced `yaml` component catalogue (source of truth): each component's `behaviour`, `responsibilities`, `depends_on`/`dependents`, `external_dependencies`, and owned `entities` (with `identifier`, attributes, and cross-component `references`). Followed by the derived human view: mermaid Component Diagram, Component Summary, Entity Ownership, External Dependencies, and Rationale tables |
 
 Additionally, a questions file is created as input:
 
 | File                                      | Contents                                        |
 |-------------------------------------------|-------------------------------------------------|
-| `application-design-questions.md`         | Design questions with `[Answer]:` tags          |
+| `domain-design-questions.md`         | Design questions with `[Answer]:` tags          |
 
 ### Approval Gate
 
@@ -883,9 +880,9 @@ Special 3-option gate:
 
 - Skip condition: changes are modifications to existing components only, with
   no new components or services needed.
-- The `decisions.md` artifact (ADRs) is a deliberate deviation from the
-  upstream reference. Each ADR includes Context, Decision, Consequences, and
-  Alternatives Considered, plus trade-off analysis and reversibility assessment.
+- Boundary rationale (and any Alternatives Rejected) is captured in the
+  Rationale section of `components.md` — a deliberate deviation from the
+  upstream reference — rather than a separate ADR artifact.
 - The design artifacts produced here are the primary input for Units Generation
   (2.7) and directly inform Construction stages (Functional Design 3.1, Code
   Generation 3.5).
@@ -910,7 +907,7 @@ Special 3-option gate:
 
 ### Purpose
 
-Units Generation decomposes the application design into discrete Units of
+Units Generation decomposes the domain design into discrete Units of
 Work that drive the phased construction flow in the Construction phase. Each
 Unit represents an independently implementable piece of the system (a
 service, module, or deployable component). The stage produces the
@@ -935,9 +932,8 @@ actual unit artifacts.
 
 ### Inputs
 
-- All design artifacts from Stage 2.6
-  (`<record>/inception/application-design/`: components.md,
-  component-methods.md, services.md, component-dependency.md, decisions.md)
+- The component catalogue from Stage 2.6
+  (`<record>/inception/domain-design/components.md`)
 - `<record>/inception/requirements-analysis/requirements.md`
 - `<record>/inception/user-stories/stories.md` (if produced)
 
@@ -953,7 +949,7 @@ actual unit artifacts.
    prioritization.
 
 2. **Load Prior Context** -- Read all artifacts from
-   `<record>/inception/application-design/` (all 5 files). Read
+   `<record>/inception/domain-design/` (all 5 files). Read
    requirements. Read user stories (if produced). Scope context comes from
    `<record>/aidlc-state.md`.
 
@@ -970,7 +966,7 @@ actual unit artifacts.
 
    NOTE: Do NOT ask about implementation order priorities (value-first,
    risk-first, walking-skeleton-first). Those are economic-sequencing
-   decisions that belong to Stage 2.8 Delivery Planning.
+   decisions that belong to Stage 2.9 Delivery Planning.
 
 4. **Collect and Analyze Answers** -- Collect answers following
    stage-protocol.md section 3 question flow. MANDATORY ambiguity analysis:
@@ -1087,8 +1083,8 @@ All Inception phase artifacts:
 
 - Requirements from Stage 2.3 (`<record>/inception/requirements-analysis/`)
 - User stories from Stage 2.4 (`<record>/inception/user-stories/`)
-- Application design from Stage 2.6
-  (`<record>/inception/application-design/`)
+- Domain design from Stage 2.6
+  (`<record>/inception/domain-design/`)
 - Units from Stage 2.7 (`<record>/inception/units-generation/`)
 - Team formation from Stage 1.5
   (`<record>/ideation/team-formation/`), if exists
@@ -1101,7 +1097,7 @@ All Inception phase artifacts:
    order validation.
 
 2. **Load Prior Context** -- Read all Inception phase artifacts: requirements,
-   user stories, application design, units, and team formation (if exists).
+   user stories, domain design, units, and team formation (if exists).
 
 3. **Generate Clarifying Questions** -- Create
    `<record>/inception/delivery-planning/delivery-planning-questions.md`
@@ -1200,8 +1196,8 @@ Changes**. The user can override stage inclusion/exclusion at this gate.
 - The bolt plan defines a confidence-building sequence. Each Bolt has
   defined Units of Work, a Definition of Done, and a confidence hypothesis.
 - The aidlc-architect-agent validates that the proposed Bolt sequence respects
-  dependencies defined in the component-dependency and
-  unit-of-work-dependency artifacts.
+  dependencies defined in the component catalogue (`components.md`) and the
+  unit-of-work-dependency artifact.
 - Team allocation draws from the Team Formation artifacts (Stage 1.5) if
   they exist; when 1.5 is SKIP (mvp, workshop), all Bolts are executed by
   aidlc-developer-agent (AI).
@@ -1228,7 +1224,7 @@ Construction and Operation:
 4. **Refined Mockups** (2.5) -- Mid-to-high fidelity mockups, interaction
    specifications, design system mapping, accessibility checklist. (When
    applicable.)
-5. **Application Design** (2.6) -- Component definitions, method signatures,
+5. **Domain Design** (2.6) -- Component definitions, method signatures,
    service definitions, dependency matrix, architecture decision records.
    (When applicable.)
 6. **Units of Work** (2.7) -- Unit definitions with boundaries and complexity

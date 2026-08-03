@@ -268,15 +268,15 @@ Produces 12 functional requirements (notification triggers, preference CRUD, ema
 
 The aidlc-product-agent first drafts the personas and stories. The aidlc-design-agent, aidlc-developer-agent, and aidlc-quality-agent then inspect that draft as mutually blind collaborators, each writing an identity-marked contribution file. The aidlc-product-agent lead integrates all three contributions into `personas.md` and `stories.md` before presenting the **Approve** / **Request Changes** gate.
 
-**Stage 2.6 — Application Design** (aidlc-architect-agent)
+**Stage 2.6 — Domain Design** (aidlc-architect-agent)
 
 The aidlc-architect-agent designs the notification service architecture:
 
-- **Components**: NotificationService, PreferenceService, EmailRenderer, DigestScheduler
-- **API contracts**: REST endpoints for preference management, internal event handlers for triggers
-- **ADRs**: Event-driven trigger pattern (vs. polling), SQS for email queue (vs. direct send)
+- **Components**: NotificationService, PreferenceService, EmailRenderer, DigestScheduler — each with behaviour, dependencies/dependents, and owned entities
+- **Entity ownership**: NotificationService owns Notification + NotificationEvent; PreferenceService owns Preference
+- **Rationale**: event-driven trigger pattern (vs. polling), SQS for email queue (vs. direct send) recorded in the Rationale section
 
-Produces `components.md`, `services.md`, `decisions.md`.
+Produces the single consolidated `components.md` (fenced `yaml` catalogue + mermaid diagram, summary, ownership, and rationale tables).
 
 **Stage 2.7 — Units Generation** (aidlc-architect-agent)
 
@@ -288,15 +288,19 @@ Decomposes into 3 units of work:
 
 Produces `unit-of-work.md` with dependency map: notification-core first, then preferences and email in parallel.
 
-**Stage 2.8 — Delivery Planning** (aidlc-delivery-agent)
+**Stage 2.8 — Contract Design** (aidlc-architect-agent)
+
+Because the system splits into three integrating units, Contract Design formalises the inter-unit boundaries: the internal event contract notification-core exposes to its callers, and the preference-lookup contract notification-email consumes from notification-preferences. Produces `contract-summary.md` (one row per boundary, each with an inline spec block).
+
+**Stage 2.9 — Delivery Planning** (aidlc-delivery-agent)
 
 Bolt sequence: Bolt 1 ships notification-core (walking skeleton — proves the event-handler pipeline end-to-end). Bolt 2 ships notification-preferences and notification-email in parallel. Per-Bolt DoDs captured in `bolt-plan.md`; WSJF-style rationale in `risk-and-sequencing-rationale.md`; external SES/SQS dependencies mapped in `external-dependency-map.md`. Phase boundary verification confirms requirements-to-architecture alignment.
 
-> Progress: 18/32 overall | INCEPTION complete. Verification Gate passed.
+> Progress: 19/33 overall | INCEPTION complete. Verification Gate passed.
 
 ### Construction Phase (stages 3.1-3.7)
 
-Construction runs **Bolt by Bolt** per the 2.8 plan. The first Bolt is the walking skeleton; the ladder prompt after it decides autonomy for the rest. Bolts with shared dependencies run in parallel.
+Construction runs **Bolt by Bolt** per the 2.9 plan. The first Bolt is the walking skeleton; the ladder prompt after it decides autonomy for the rest. Bolts with shared dependencies run in parallel.
 
 **Bolt 1: notification-core** — walking skeleton (always gated)
 

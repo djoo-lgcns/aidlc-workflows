@@ -62,7 +62,7 @@
 - [-] requirements-analysis — EXECUTE
 - [S] user-stories — SKIP (bugfix scope)
 - [S] refined-mockups — SKIP (bugfix scope)
-- [S] application-design — SKIP (bugfix scope)
+- [S] domain-design — SKIP (bugfix scope)
 - [S] units-generation — SKIP (bugfix scope)
 - [S] delivery-planning — SKIP (bugfix scope)
 

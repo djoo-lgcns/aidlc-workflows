@@ -636,7 +636,7 @@ existence, then offers to resume from the last incomplete stage.
 | **Inception -- RE** | Per-repo RE artifacts at `aidlc/spaces/<active-space>/codekb/<repo>/`; ideation scope/feasibility |
 | **Inception -- Practices Discovery** | Preserve the lead draft and existing contribution files; dispatch only missing quality/developer/devsecops spokes, then continue with the human interview and lead integration |
 | **Inception -- Requirements** | Per-repo `codekb/` artifacts (if performed); requirements-analysis docs |
-| **Inception -- Design** | Requirements; user stories; application-design docs |
+| **Inception -- Design** | Requirements; user stories; domain-design docs |
 | **Inception -- Delivery Planning** | All inception artifacts; delivery-planning if partial |
 | **Construction -- Code Gen** | Current unit's design artifacts, story design, acceptance criteria, prior code |
 | **Construction -- Build/Test** | Current unit's code, test plans, acceptance criteria, build config |

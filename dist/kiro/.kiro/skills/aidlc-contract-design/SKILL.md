@@ -1,20 +1,20 @@
 ---
-name: aidlc-application-design
+name: aidlc-contract-design
 generated-by: aidlc-runner-gen
 description: >
-  Run the AI-DLC `application-design` stage (inception phase) in isolation, without
-  advancing the main workflow. Packages `/aidlc --stage application-design --single`:
-  the engine emits one run-stage directive for application-design and its gate, the
+  Run the AI-DLC `contract-design` stage (inception phase) in isolation, without
+  advancing the main workflow. Packages `/aidlc --stage contract-design --single`:
+  the engine emits one run-stage directive for contract-design and its gate, the
   conductor runs it, then the single-stage run commits a synthetic-id pair and
   stops. The main workflow's Current Stage is never touched.
 argument-hint: ""
 user-invocable: true
 ---
 
-# AI-DLC Stage Runner — application-design
+# AI-DLC Stage Runner — contract-design
 
-Run the `application-design` stage on its own. This is opt-in packaging over
-`/aidlc --stage application-design --single`; the same stage is always reachable via
+Run the `contract-design` stage on its own. This is opt-in packaging over
+`/aidlc --stage contract-design --single`; the same stage is always reachable via
 that flag without this skill.
 
 ## Steps
@@ -22,10 +22,10 @@ that flag without this skill.
 1. Ask the engine for the single-stage directive:
 
    ```bash
-   bun .kiro/tools/aidlc-orchestrate.ts next --stage application-design --single
+   bun .kiro/tools/aidlc-orchestrate.ts next --stage contract-design --single
    ```
 
-   The engine emits one `run-stage` directive for `application-design` (carrying the
+   The engine emits one `run-stage` directive for `contract-design` (carrying the
    lead agent, the resolved consumes/produces paths, the rules and sensors in
    context, and — on this first directive — the conductor persona). Run the stage
    exactly as the directive describes; do not load the conductor persona by hand,
@@ -34,7 +34,7 @@ that flag without this skill.
 2. When the stage's work is done, commit the single-stage record:
 
    ```bash
-   bun .kiro/tools/aidlc-orchestrate.ts report --single --stage application-design --result completed
+   bun .kiro/tools/aidlc-orchestrate.ts report --single --stage contract-design --result completed
    ```
 
    This records a STAGE_STARTED / STAGE_COMPLETED pair under a synthetic workflow

@@ -11,7 +11,7 @@ A native implementation of the **AI-DLC methodology** (AI-Driven Development Lif
 
 The methodology lives once, in a harness-neutral `core/`; each harness adds a thin surface that decides how it shows up on that harness. So you edit the methodology in one place, and every harness distribution is generated from it — no harness gets special treatment. (See [Repository layout](#repository-layout) for how the pieces fit together.)
 
-![version](https://img.shields.io/badge/version-2.5.36-blue)
+![version](https://img.shields.io/badge/version-2.6.1-blue)
 ![license](https://img.shields.io/badge/license-MIT--0-green)
 ![Kiro IDE](https://img.shields.io/badge/harness-Kiro%20IDE-orange)
 ![Kiro CLI](https://img.shields.io/badge/harness-Kiro%20CLI-orange)
@@ -33,7 +33,7 @@ Ad-hoc AI coding works until the project gets real. Then context drifts between 
 
 ## Key Features
 
-- **[5 phases, 32 stages](docs/guide/04-phases-and-stages.md)** — Initialization, Ideation, Inception, Construction, Operation
+- **[5 phases, 33 stages](docs/guide/04-phases-and-stages.md)** — Initialization, Ideation, Inception, Construction, Operation
 - **[14-agent roster](docs/guide/06-agents.md)** — 11 domain experts, 2 quality-gate reviewers, and the adaptive-workflows composer
 - **[9 adaptive scopes](docs/guide/05-scopes-and-depth.md)** (enterprise through workshop) with auto-detection from freeform intent, plus an **[adaptive composer](docs/guide/05-scopes-and-depth.md#the-adaptive-composer)** (`/aidlc compose`) that proposes a tailored stage plan from your task, a scan report, or the running workflow
 - **[3 depth levels](docs/guide/05-scopes-and-depth.md#the-3-depth-levels)** (Minimal/Standard/Comprehensive) — control artifact detail per stage
@@ -292,7 +292,7 @@ aidlc-claude/
 │  ─────────── HAND-AUTHORED SOURCE — edit here ───────────
 ├── core/                       # ONE harness-neutral source of truth
 │   ├── tools/                  #   34 aidlc-*.ts engine tools (+ data/scaffold/ templates)
-│   ├── aidlc-common/           #   stage protocol + 32 stage files + conductor
+│   ├── aidlc-common/           #   stage protocol + 33 stage files + conductor
 │   ├── agents/                 #   14 agents: 11 domain + 2 reviewers + composer
 │   ├── knowledge/ memory/ scopes/ sensors/ hooks/
 │   ├── skills/                 #   3 session skills (session-cost, replay, outcomes-pack)

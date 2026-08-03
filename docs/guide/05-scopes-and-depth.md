@@ -113,7 +113,6 @@ Scopes differ by an order of magnitude in ceremony: `poc` runs 8 stages with 5 a
 The routing table above gives the counts; this matrix shows exactly **which** stages execute under each stock scope, so you can see what you will walk through before starting a workflow. A ✓ means the stage is EXECUTE under that scope; an empty cell means SKIP. Stage numbers and names match [Phases and Stages](04-phases-and-stages.md).
 
 <!-- BEGIN scope-stage-matrix: derived from each stage's `scopes:` frontmatter via the compiled scope-grid.json — kept in sync by tests/unit/t244-scope-matrix-doc-sync.test.ts; do not hand-edit cells without re-checking that test -->
-
 | # | Stage | `enterprise` | `feature` | `mvp` | `poc` | `bugfix` | `refactor` | `infra` | `security-patch` | `workshop` |
 |---|-------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | 0.1–0.3 | Initialization (all 3 stages) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -129,9 +128,10 @@ The routing table above gives the counts; this matrix shows exactly **which** st
 | 2.3 | Requirements Analysis | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | 2.4 | User Stories | ✓ | ✓ | ✓ |  |  |  |  |  | ✓ |
 | 2.5 | Refined Mockups | ✓ | ✓ | ✓ |  |  |  |  |  | ✓ |
-| 2.6 | Application Design | ✓ | ✓ | ✓ |  |  |  |  |  | ✓ |
+| 2.6 | Domain Design | ✓ | ✓ | ✓ |  |  |  |  |  | ✓ |
 | 2.7 | Units Generation | ✓ | ✓ | ✓ |  |  |  |  |  | ✓ |
-| 2.8 | Delivery Planning | ✓ | ✓ | ✓ |  |  |  |  |  | ✓ |
+| 2.8 | Contract Design | ✓ | ✓ | ✓ |  |  |  |  |  |  |
+| 2.9 | Delivery Planning | ✓ | ✓ | ✓ |  |  |  |  |  | ✓ |
 | 3.1 | Functional Design | ✓ | ✓ | ✓ |  |  | ✓ |  |  | ✓ |
 | 3.2 | NFR Requirements | ✓ | ✓ | ✓ |  |  |  | ✓ | ✓ | ✓ |
 | 3.3 | NFR Design | ✓ | ✓ | ✓ |  |  |  | ✓ |  | ✓ |
@@ -146,8 +146,7 @@ The routing table above gives the counts; this matrix shows exactly **which** st
 | 4.5 | Incident Response | ✓ | ✓ |  |  |  |  |  |  | ✓ |
 | 4.6 | Performance Validation | ✓ | ✓ |  |  |  |  |  |  | ✓ |
 | 4.7 | Feedback & Optimization | ✓ | ✓ |  |  |  |  |  |  | ✓ |
-| | **Total stages** | **32** | **32** | **22** | **8** | **7** | **8** | **13** | **10** | **25** |
-
+| | **Total stages** | **33** | **33** | **23** | **8** | **7** | **8** | **13** | **10** | **25** |
 <!-- END scope-stage-matrix -->
 
 A ✓ marks static scope membership — it means the stage is included in the scope's plan, not that it will unconditionally execute. CONDITIONAL stages may be skipped at runtime when their condition does not hold (for example, Reverse Engineering only runs for brownfield projects), and pending stages can be reshaped through an approved composer proposal (see [the composer](#the-adaptive-composer)). Composed (custom) scopes are not listed here — their grids live in `scope-grid.json` alongside the stock ones.

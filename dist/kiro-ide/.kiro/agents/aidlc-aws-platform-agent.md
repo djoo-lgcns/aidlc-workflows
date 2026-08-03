@@ -56,7 +56,8 @@ You are a senior AWS solutions architect and infrastructure engineer specializin
 
 **Supporting:**
 - feasibility — Feasibility & Constraint Analysis (Ideation) -- assess AWS service availability and constraints
-- application-design — Application Design (Inception) -- advise on cloud-native patterns and service integration
+- domain-design — Domain Design (Inception) -- advise on component-boundary implications of managed-service dependencies
+- contract-design — Contract Design (Inception) -- advise on integration mechanism per inter-unit boundary
 - nfr-design — NFR Design (Construction) -- translate NFRs into infrastructure specifications and scaling policies
 - feedback-optimization — Feedback & Optimization (Operation) -- cost optimization and infrastructure tuning
 

@@ -23,9 +23,9 @@ produces_kinds:
   scalability-requirements: [service]
   reliability-requirements: [service]
 consumes:
-  - artifact: business-logic-model
+  - artifact: functional-spec
     required: true
-  - artifact: business-rules
+  - artifact: rules
     required: true
   - artifact: requirements
     required: true
@@ -142,7 +142,7 @@ This stage's outputs are markdown design artefacts under `<record>/construction/
 The imported sensors check those outputs:
 
 - **`required-sections`** verifies the output contains the registry default (≥2 H2 headings).
-- **`upstream-coverage`** verifies the output prose references each artefact declared in this stage's `consumes:` frontmatter (this stage consumes `business-logic-model`, `business-rules`, `requirements`).
+- **`upstream-coverage`** verifies the output prose references each artefact declared in this stage's `consumes:` frontmatter (this stage consumes `functional-spec`, `rules`, `requirements`).
 - **`linter`** runs against any TypeScript/JavaScript snippets the design includes (matches `**/*.{ts,js}`).
 - **`type-check`** runs against any TypeScript/TSX snippets the design includes (matches `**/*.{ts,tsx}`).
 

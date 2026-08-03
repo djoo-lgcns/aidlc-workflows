@@ -104,7 +104,7 @@ git checkout v2
 Invoke the orchestrator with `$aidlc` (or `/skills` → aidlc) followed by a
 scope or description — same commands as the Claude harness (`$aidlc --status`,
 `$aidlc --help`, …). Stage runners are explicit-only:
-`$aidlc-application-design`, `$aidlc-bugfix`, etc. (they are excluded from
+`$aidlc-domain-design`, `$aidlc-bugfix`, etc. (they are excluded from
 implicit skill matching so 37 runner descriptions don't pollute the index).
 
 ## Harness differences vs Claude Code

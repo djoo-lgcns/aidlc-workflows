@@ -50,9 +50,9 @@ resetAidlcEnv();
 const ORCH = join(AIDLC_SRC, "tools", "aidlc-orchestrate.ts");
 
 const FD_PRODUCES = [
-  "business-logic-model",
-  "business-rules",
-  "domain-entities",
+  "entities",
+  "rules",
+  "functional-spec",
   "frontend-components",
 ];
 
@@ -111,7 +111,7 @@ ${autonomyLine}## Scope Configuration
 - [ ] build-and-test — EXECUTE
 
 ### INCEPTION PHASE
-- [-] application-design — EXECUTE
+- [-] domain-design — EXECUTE
 
 ## Current Status
 - **Lifecycle Phase**: CONSTRUCTION
