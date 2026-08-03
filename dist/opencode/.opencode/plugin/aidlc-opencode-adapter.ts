@@ -435,7 +435,7 @@ export default async ({
             }
           } catch {
             throw new Error(
-              "AIDLC dispatch-rules hook returned invalid rewrite output",
+              "AIDLC deliver-stage-rules hook returned invalid rewrite output",
             );
           }
         }

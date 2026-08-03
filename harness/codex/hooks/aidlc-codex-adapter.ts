@@ -39,9 +39,9 @@
 // Usage (wired in .codex/hooks.json):
 //   bun .codex/hooks/aidlc-codex-adapter.ts <target>
 // where <target> ∈ session-start | audit-and-sensors | state-sync |
-//                  runtime-compile | validate-state | log-subagent | stop |
+//                  rebuild-stage-graph | validate-state | log-subagent |
 //                  mint | state-transition-guard | reviewer-scope
-//                  | dispatch-rules
+//                  continue-workflow | deliver-stage-rules
 
 import { createHash } from "node:crypto";
 import {
@@ -325,7 +325,7 @@ switch (target) {
   }
 
   case "audit-and-sensors": {
-    // apply_patch → audit-logger THEN sensor-fire per touched file (mirrors
+    // apply_patch → write-audit-log THEN run-sensors per touched file (mirrors
     // the Claude settings.json Write|Edit registration order). Advisory.
     if ((codex.tool_name ?? "") === "apply_patch") {
       const command = (codex.tool_input?.command as string) ?? "";

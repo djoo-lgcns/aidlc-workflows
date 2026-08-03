@@ -902,14 +902,14 @@ function readConstructionIteration(
 //               parse; the unit list is unknowable, callers surface an error
 //               instead of silently building one unit.
 // Pure in-memory: never writes the graph (next stays read-only); the
-// runtime-compile hook repairs the cache on the next transition.
+// rebuild-stage-graph hook repairs the cache on the next transition.
 type BoltBatchesResolution = BoltDagResolution;
 
 function resolveBoltBatches(projectDir: string): BoltBatchesResolution {
   const resolution = resolveBoltDag(projectDir);
   if (resolution.state === "ok" && resolution.healed) {
     process.stderr.write(
-      `aidlc-orchestrate: runtime-graph.json bolt_dag is missing or stale; recomputed ${resolution.batches.length} unit batch(es) from unit-of-work-dependency.md (check the runtime-compile hook)\n`,
+      `aidlc-orchestrate: runtime-graph.json bolt_dag is missing or stale; recomputed ${resolution.batches.length} unit batch(es) from unit-of-work-dependency.md (check the rebuild-stage-graph hook)\n`,
     );
   }
   return resolution;

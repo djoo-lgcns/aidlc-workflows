@@ -2,7 +2,7 @@
 //
 // This is one of the framework's flow-altering hooks. The advisory hooks
 // observe (audit, sensors, statusline, state
-// validation) and always exit 0. The sensor-fire hook in particular carries
+// validation) and always exit 0. The run-sensors hook in particular carries
 // an explicit advisory contract: it NEVER returns {decision: block} (its own
 // contract, asserted by t95 Case 7 — not a framework ban). This hook is a
 // DIFFERENT, sanctioned contract: it may emit {"decision":"block", ...} to

@@ -944,7 +944,7 @@ function shellCommandSegments(command: string): string[] {
   return segments;
 }
 
-// Classify commands for the runtime-compile hook's cheap PostToolUse gate.
+// Classify commands for the rebuild-stage-graph hook's cheap PostToolUse gate.
 // Transition matching stays intentionally lexical, but the recursion guard
 // only examines real unquoted shell-command segments.
 const runtimeCompileHarnessPattern = KNOWN_HARNESS_DIRS
@@ -3542,7 +3542,7 @@ export function swarmConvergedUnits(
 // the last STAGE_STARTED block is the most recent transition. The slug lives in
 // the block's `**Stage**:` field (appendAuditEntry writes the fields verbatim).
 // Payload-free derivation of "what stage are we on" — used by the Kiro IDE
-// sync-statusline path, where the hook receives no task payload and must read
+// sync-workflow-state path, where the hook receives no task payload and must read
 // the current stage from the audit tail instead.
 //
 // EXCLUDES synthetic `--single` stage-runner rows (Workflow: single-stage:<slug>)

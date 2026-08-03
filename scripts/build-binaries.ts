@@ -675,7 +675,7 @@ function sensorFireGate(artifact: string): GateResult {
     const audit = textFilesUnder(join(project, "aidlc", "spaces"));
     const output = `${result.stdout}\n${result.stderr}`;
     return commandGate(
-      "sensor-fire",
+      "run-sensors",
       result,
       birth.status === 0 &&
         result.status === 0 &&

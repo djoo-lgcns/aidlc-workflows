@@ -31,7 +31,7 @@ This project uses AI-DLC (AI-Driven Development Life Cycle) for structured devel
 This is the same AI-DLC core that ships to every harness: the same ordered steps, the same approval gates, and the same written record of what was decided, rendered onto opencode. On opencode:
 
 - Approval gates and questions render as **numbered prose options** (no structured-question widget); the questions FILE with \`[Answer]:\` tags remains the source of truth.
-- Hooks ride the **AIDLC adapter plugin** (\`.opencode/plugin/aidlc-opencode-adapter.ts\`): reviewer read-scope enforcement and the AIDLC bash-command boundary run before tools; audit and sensors cover write, edit, and apply_patch; runtime-compile, presence minting, and pre-compaction state validation run from the matching opencode moments.
+- Hooks ride the **AIDLC adapter plugin** (\`.opencode/plugin/aidlc-opencode-adapter.ts\`): reviewer read-scope enforcement and the AIDLC bash-command boundary run before tools; audit and sensors cover write, edit, and apply_patch; stage-graph rebuilds, human-turn recording, and pre-compaction state validation run from the matching opencode moments.
 - The forwarding-loop enforcement (the Stop hook) rides \`session.idle\` and re-engages the loop by **injecting a nudge prompt** — advisory, not blocking; a chatting or pausing human is released by the hook's interactive cap.
 - The AI-DLC method (\`aidlc/spaces/<space>/memory/*.md\`) reaches ambient context via the \`instructions\` glob in the project \`opencode.json\` or \`opencode.jsonc\`; \`/aidlc space <name>\` re-points every present config without removing JSONC comments.
 - There is **no statusline** and **no welcome message**; use \`/aidlc --status\` and the progress lines at gates.
