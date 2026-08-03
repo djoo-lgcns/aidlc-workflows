@@ -461,7 +461,7 @@ export default async ({
         if (guard.code === 2) {
           throw new Error(
             guard.stderr.trim() ||
-              "only the workflow engine may change a stage's status: use aidlc-orchestrate.ts report instead of calling aidlc-state.ts directly",
+              "stage status is changed by the workflow tools, not by hand: use aidlc-orchestrate.ts report instead of calling aidlc-state.ts directly",
           );
         }
       }
