@@ -176,8 +176,10 @@ Run the section 13 learnings ritual, then:
 2. Do not log the affirmation gate with `aidlc-log.ts decision` or
    `aidlc-log.ts answer`; the lifecycle `report` calls own its audit events.
 3. Present `team-practices.md` and `discovered-rules.md` with two options:
-   **Approve** (promote, then continue to `directive.next_stage`) and
-   **Request Changes**.
+   **Approve** (promote, then continue to the next stage) and
+   **Request Changes**. Write the actual next stage name into the Approve
+   option's description, read from the run-stage directive's `next_stage` field
+   (`Complete workflow` when it is null); never show the field name to the user.
 4. STOP and wait for the human response.
 5. Carry the exact answer only into the matching `report` or promotion path
    below; never call `aidlc-log.ts answer` for this gate.

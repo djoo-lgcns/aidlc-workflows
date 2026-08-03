@@ -497,7 +497,7 @@ function createPrintDirective(scope: string, flags: ParsedFlags, description?: s
     // without --label still births a sane name by truncating --arguments.)
     cmd.push(`--label "<2-3 word kebab essence>"`);
     labelHint =
-      ` Replace \`--label\` with a 2-3 word kebab essence of the description (e.g. "simple calc") — it becomes the readable record dir name.`;
+      ` Replace \`--label\` with a 2-3 word kebab essence of the description (e.g. "simple calc"), which becomes the readable folder name for this piece of work.`;
   }
   if (flags.depth) cmd.push(`--depth ${flags.depth}`);
   if (flags.testStrategy) cmd.push(`--test-strategy ${flags.testStrategy}`);
@@ -555,7 +555,7 @@ function composeDispatchDirective(
   }
   parts.push(
     `The composer runs \`bun ${hd}/tools/aidlc-utility.ts detect --json\` (read-only scan + scope-registry paths), estimates the five entropy components (intent ambiguity, structural uncertainty, verification entropy, risk, unresolved assumptions) per its persona, and returns a structured proposal: mode matched|custom, scopeName, an ars block (the five component scores with method codekb|fallback), an arsRationale, the per-stage EXECUTE/SKIP grid, a per-SKIP rationale, a summary the validator computed, and two pre-rendered markdown tables (ARS scores with bands; per-stage decisions with reasoning).`,
-    "Render the proposal to the human as THREE blocks before the approve/edit/reject gate (see the composer block in SKILL.md): (1) the validator's summary line formatted \"<execute> stages EXECUTE / <skip> SKIP, <gates> approval gates\" plus scopeName and mode - use the validator's numbers verbatim, never recount by hand; (2) the composer's ARS score table verbatim, with its method line and arsRationale; (3) the composer's stage-decision table verbatim, with any fold advisories beneath it. Relay the composer's tables and numbers as returned - never recompute, collapse into prose, or drop them. Do NOT write any file and do NOT advance any stage before an explicit approval.",
+    "Render the proposal to the human as THREE blocks before the approve/edit/reject gate (see the composer block in SKILL.md), leading with plain language rather than the scores: (1) a two-or-three-sentence recommendation in your own words - what kind of change this looks like, how much process you suggest, and the steps in plain terms - followed by the validator's summary line formatted \"<execute> stages EXECUTE / <skip> SKIP, <gates> approval gates\" plus scopeName and mode (a matched stock scope stays matched: presentation never changes the composer's matched-vs-custom verdict, and a MATCHED proposal writes no scope file); (2) the composer's stage-decision table verbatim, with any fold advisories beneath it; (3) under a \"Scoring detail (advisory)\" heading, the composer's ARS score table verbatim with its method line and arsRationale. Relay the composer's tables and numbers as returned - never recompute, collapse into prose, or drop them. Do NOT write any file and do NOT advance any stage before an explicit approval.",
   );
   return printDirective(parts.join(" "));
 }
@@ -593,10 +593,10 @@ function intentPickPromptIfRecordsExist(
   const list = slugs.map((s) => `\`${s}\``).join(", ");
   const spaceLabel = space === "default" ? "" : ` in space "${space}"`;
   return askDirective(
-    `This workspace already has ${intents.length} intent${intents.length === 1 ? "" : "s"}${spaceLabel} but no active intent is selected ` +
-      `(the active-intent cursor is per-user and not cloned). ` +
-      `Pick one to work on with \`/aidlc intent <slug>\`: ${list}. ` +
-      "Selecting an intent sets the cursor; re-run `next` afterward to continue its workflow.",
+    `This project already has ${intents.length} piece${intents.length === 1 ? "" : "s"} of work in progress${spaceLabel}, and none is currently selected ` +
+      `(which one you are on is tracked per-person and does not travel with the repo). ` +
+      `Pick the one to work on with \`/aidlc intent <slug>\`: ${list}. ` +
+      "That selects it; re-run `next` afterward to carry on where it left off.",
   );
 }
 
@@ -1475,9 +1475,9 @@ function inlineContextRoster(
   const omitted = allPaths.length - paths.length;
   if (omitted > 0) {
     warnings.push(
-      `Warning: ${omitted} optional persona/knowledge path(s) were omitted because ` +
-        `inline_context_paths exceeded its ${INLINE_CONTEXT_PATHS_MAX_BYTES}-byte transport budget. ` +
-        "Reduce the configured knowledge file count; this stage will continue without the omitted optional context.",
+      `Warning: ${omitted} optional persona/knowledge path(s) were omitted because there was ` +
+        `no room to pass them all (inline_context_paths is capped at ${INLINE_CONTEXT_PATHS_MAX_BYTES} bytes). ` +
+        "Configure fewer knowledge files if this matters; the stage runs without the omitted optional context.",
     );
   }
   return { paths, warnings: boundedContextWarnings(warnings) };
@@ -1754,8 +1754,8 @@ function steeringTokenKey(
         return {
           key: null,
           error:
-            `The machine-local steering token key at "${path}" is invalid. ` +
-            "Delete it and run a fresh `next` to mint a replacement.",
+            `The local key file at "${path}" is corrupt, so this stage's rules cannot be loaded safely. ` +
+            "Delete that file and run a fresh `next`; a replacement is created automatically.",
         };
       }
       return { key, error: null };
@@ -1763,7 +1763,7 @@ function steeringTokenKey(
       return {
         key: null,
         error:
-          `Cannot read the machine-local steering token key at "${path}" ` +
+          `Cannot read the local key file at "${path}", so this stage's rules cannot be loaded ` +
           `(${errorMessage(error)}).`,
       };
     }
@@ -1788,7 +1788,7 @@ function steeringTokenKey(
     return {
       key: null,
       error:
-        `Cannot create the machine-local steering token key at "${path}" ` +
+        `Cannot create the local key file at "${path}", so this stage's rules cannot be loaded ` +
         `(${errorMessage(error)}). Fix the directory permissions, then run a fresh \`next\`.`,
     };
   }
@@ -1945,12 +1945,12 @@ function transportRunStage(
       requested.d !== directiveHash
     ) {
       return errorDirective(
-        "The stage or its rules changed during steering delivery. Run a fresh `next` to restart delivery from part 1.",
+        "This stage or its rules changed while they were being loaded, so what has arrived so far is stale. Run a fresh `next` to restart delivery from part 1.",
       );
     }
     if (requested.i > chunks.length) {
       return errorDirective(
-        "The steering continuation token is out of range. Run a fresh `next` to restart delivery from part 1.",
+        "This request asks for a part of the stage rules that does not exist. Run a fresh `next` to restart delivery from part 1.",
       );
     }
     if (requested.i === chunks.length) return directive;
@@ -1973,7 +1973,7 @@ function transportRunStage(
   if (!encoded.token) {
     return errorDirective(
       encoded.error ??
-        "Cannot protect the steering continuation token. Run a fresh `next` after repairing the machine-local runtime state.",
+        "This stage's rules cannot be loaded safely right now. Run a fresh `next` after repairing the local runtime files under `aidlc/`.",
     );
   }
   const load: LoadSteeringDirective = {
@@ -2453,8 +2453,8 @@ function handleNext(args: string[], projectDir: string | undefined): void {
       const clause = costClause(inferred.scope);
       const cost = clause ? ` - ${clause}` : "";
       emit(askDirective(
-        `Starting a "${inferred.scope}" workflow for: "${flags.intent}"${cost}. ` +
-          "Confirm to proceed, name a different scope, or say \"compose\" for a tailored plan.",
+        `This looks like "${inferred.scope}" work, so I'd run the "${inferred.scope}" plan for: "${flags.intent}"${cost}. ` +
+          "Say go ahead, name a different plan, or say \"compose\" and I'll tailor one to this task.",
       ));
       return;
     }
@@ -2469,9 +2469,9 @@ function handleNext(args: string[], projectDir: string | undefined): void {
       ? `bugfix = ${bf.execute} of ${bf.total} stages, poc = ${poc.execute}, feature = all ${feat.execute}`
       : fallbackExamples;
     emit(askDirective(
-      `No stock scope clearly fits: "${flags.intent}". ` +
-        "I can compose a tailored plan for this task (recommended: reply \"compose\"), " +
-        `or you can name a scope directly (e.g. ${examples}; see /aidlc --help for all).`,
+      `None of the ready-made plans is an obvious fit for: "${flags.intent}". ` +
+        "I can work out a plan tailored to this task (recommended: reply \"compose\"), " +
+        `or you can pick one directly (e.g. ${examples}; see /aidlc --help for the full list).`,
     ));
     return;
   }
@@ -4090,7 +4090,7 @@ function handleResumeReport(
   }
   if (choice.includes("jump")) {
     emit(printDirective(
-      `Jump accepted. Ask the human which stage to jump to, then re-run \`next --stage <slug>\` — the engine resolves the direction and validates the target.`,
+      `Jump accepted. Ask the human which stage to jump to, then re-run \`next --stage <slug>\`; the direction and the target are worked out and checked for you.`,
     ));
     return;
   }
@@ -4381,7 +4381,7 @@ function handleReport(args: string[], projectDir: string | undefined): void {
       return;
     }
     emit(printDirective(
-      `Recorded ${flags.result} for "${slug}" through the orchestration engine.`,
+      `Recorded ${flags.result} for "${slug}".`,
     ));
     return;
   }
@@ -4597,7 +4597,7 @@ function handleContinue(args: string[], projectDir: string | undefined): void {
   const payload = decodeSteeringToken(token, pd);
   if (!payload || args.length !== 1) {
     emit(errorDirective(
-      "Invalid steering continuation token. Run a fresh `next` to restart delivery from part 1.",
+      "Invalid steering continuation token: this stage's rules cannot be loaded from where they left off. Run a fresh `next` to restart delivery from part 1.",
     ));
     return;
   }
@@ -4605,7 +4605,7 @@ function handleContinue(args: string[], projectDir: string | undefined): void {
   const liveStateHash = liveState === null ? null : sha256(liveState);
   if (payload.a && payload.h !== liveStateHash) {
     emit(errorDirective(
-      "The workflow state changed during steering delivery. Run a fresh `next` to restart delivery from part 1.",
+      "The saved position moved on: the workflow state changed while this stage's rules were being loaded. Run a fresh `next` to restart delivery from part 1.",
     ));
     return;
   }
@@ -4618,7 +4618,7 @@ function handleContinue(args: string[], projectDir: string | undefined): void {
   }
   if (payload.r !== steeringRouteHash(node, payload.c)) {
     emit(errorDirective(
-      "The stage route changed during steering delivery. Run a fresh `next` to restart delivery from part 1.",
+      "Which stage runs next has changed: the stage route changed while its rules were being loaded. Run a fresh `next` to restart delivery from part 1.",
     ));
     return;
   }

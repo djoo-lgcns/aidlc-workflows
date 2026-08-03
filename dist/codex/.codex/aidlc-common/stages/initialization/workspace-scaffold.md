@@ -78,7 +78,9 @@ for the write paths.
 
 ### Step 4: Display Confirmation
 
-List the created directory structure for user awareness.
+Confirm in one plain line that the workspace is ready and name the single
+directory the user's work will live in. Do not print the directory tree: the
+folder layout is framework housekeeping, not something they need to read.
 
 ### Step 5: Update State and Audit
 

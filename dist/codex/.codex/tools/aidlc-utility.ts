@@ -200,9 +200,9 @@ Scopes (set depth, test strategy, and stage count):
 const HELP_TEXT_TAIL = `
 Utilities:
   --status          Show current workflow progress (read-only)
-  compose "<task>"  Propose a tailored EXECUTE/SKIP plan (mid-workflow: re-shape the pending stages)
-  compose --report <path>  Compose from a scan report (triage findings into a fix-and-ship run)
-  --new-scope "<task>"  Force the composer to synthesize a custom scope even when a stock scope matches
+  compose "<task>"  Suggest a plan tailored to this task (mid-workflow: adjust the steps not yet run)
+  compose --report <path>  Build a plan from a scan report (sort findings into a fix-and-ship run)
+  --new-scope "<task>"  Build a custom plan even when a ready-made one matches
   intent list       List intents in the active space (read-only; --json for structured output)
   intent switch <name>  Switch the active intent (bare intent <name> still works)
   space list        List spaces (read-only; --json for structured output)
@@ -913,7 +913,7 @@ function handleStatus(projectDir: string, flags: Record<string, string>): void {
       `No active AI-DLC workflow found.
 
 To get started:
-  /aidlc "build the auth service"   Describe what to build (creates an intent for you)
+  /aidlc "build the auth service"   Describe what to build (creates the workflow record automatically)
   /aidlc <scope>      Start a workflow by scope (e.g., /aidlc feature)
   /aidlc --help       Show all commands and scopes
 `
@@ -3981,7 +3981,7 @@ function handleInitTransition(): void {
 
 function handleStateInit(_projectDir: string, _flags: Record<string, string>): void {
   die(
-    "state-init is merged into intent-create. A workflow starts by describing what to build (/aidlc \"build the auth service\"); the engine creates the intent for you."
+    "state-init is merged into intent-create. Just describe what you want to build (/aidlc \"build the auth service\") and the workflow record is created for you."
   );
 }
 
@@ -4379,10 +4379,10 @@ function handleScopeChange(projectDir: string, flags: Record<string, string>): v
   // sites are grandfathered), so this site cannot drift from the others.
   if (isAutonomousMode(content)) {
     die(
-      "Cannot change scope: Construction Autonomy Mode is autonomous. Re-shaping the " +
-        "plan needs a human at the gate, and an unattended run has none. Switch to " +
-        "gated Construction first (aidlc-bolt set-autonomy --mode gated) or let the " +
-        "swarm finish, then change scope.",
+      "Cannot change scope while Construction is running unattended (Construction Autonomy Mode " +
+        "is autonomous). Changing the plan needs someone to approve it, and nobody is being asked " +
+        "right now. Either switch back to stopping for approval at each Bolt " +
+        "(aidlc-bolt set-autonomy --mode gated) or wait for the current build to finish, then change scope.",
     );
   }
   const oldScope = getField(content, "Scope");
@@ -4586,10 +4586,10 @@ function handleRecompose(projectDir: string, flags: Record<string, string>): voi
     // explicit flag, not the default.
     if (getField(content, "Construction Autonomy Mode")?.trim() === "autonomous") {
       die(
-        "Cannot recompose: Construction Autonomy Mode is autonomous. Re-shaping the " +
-          "plan needs a human at the gate, and an unattended run has none. Switch to " +
-          "gated Construction first (aidlc-bolt set-autonomy --mode gated) or let the " +
-          "swarm finish, then recompose.",
+        "Cannot change the plan while Construction is running unattended (Construction Autonomy " +
+          "Mode is autonomous). Changing the plan needs someone to approve it, and nobody is being " +
+          "asked right now. Either switch back to stopping for approval at each Bolt " +
+          "(aidlc-bolt set-autonomy --mode gated) or wait for the current build to finish, then recompose.",
       );
     }
     // Only a RUNNING workflow has a live plan to re-shape. A Completed (or

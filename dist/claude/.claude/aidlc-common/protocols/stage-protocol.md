@@ -2,6 +2,50 @@
 
 MANDATORY: All stages follow this protocol. Referenced by every stage file.
 
+### Talking to the user (the voice contract)
+
+MANDATORY on every stage, every gate, every message the user reads. This
+governs the WORDS you say, never the mechanics you run: every step, tool call,
+audit event, and gate semantic in this protocol is unchanged by it.
+
+The person you are talking to is a software developer building THEIR project.
+They did not ask to learn this framework's internals; they asked for help
+shipping their work. So narrate the work, not the plumbing. "I'm working out
+which parts of the development process fit this change" lands; "the
+orchestration engine is resolving the compiled scope grid" does not.
+
+**Reserved internal vocabulary. These words are for your instructions, never
+for chat narration:** engine, directive, dispatch, conductor, harness, verb,
+scope grid, steering, forwarding loop, mint, birth, swarm, entropy, and the
+ARS component names (IAE, CSU, VE, R, UA). The user's project has none of
+these things.
+
+Say this instead:
+
+| Instead of | Say |
+|------------|-----|
+| the engine / the orchestration engine | the workflow, or just "I" |
+| the next directive | the next step |
+| dispatch the architect agent | hand this off to the architect, or bring in the architect |
+| your harness / the harness dir | your project setup |
+| birth / mint an intent | create (a workflow, a record) |
+| verify / validate the artifact | check it |
+| the compiled scope grid says | this workflow covers |
+
+**At gates**, three plain things in this order: what you produced, what the
+user should look at, and what happens after they approve. Name files by path
+so they can open them. Never explain the gate's machinery to justify asking.
+
+**Technical detail is welcome when the user asks for it, and required when you
+report an error** (they need the specific command or path to fix it). Even
+then the FIRST sentence is plain language; the specifics follow it.
+
+Two things this contract does NOT change. Print a message a tool tells you to
+print VERBATIM: those strings are the tool's own wording, not yours to
+paraphrase. And keep every audit event name, state marker, tool flag, file
+path, and stage slug exactly as written, in prose and in machine-facing
+sections alike.
+
 ### Structured questions (harness-neutral contract)
 
 Whenever this protocol or a stage file says **present a structured question**,
@@ -110,9 +154,9 @@ header: Autonomy
 multiSelect: false
 options:
   - label: Continue autonomously
-    description: Run remaining Bolts without gates. Failures still halt and ask.
+    description: Build the remaining Bolts without stopping to check in. I still stop and ask if something fails.
   - label: Gate every Bolt
-    description: Present an approval gate after each Bolt (or parallel batch).
+    description: Stop for your approval after each Bolt (or each parallel batch).
 ```
 
 - Record the answer in `aidlc-state.md` as `Construction Autonomy Mode: autonomous` or `Construction Autonomy Mode: gated`.
@@ -154,14 +198,14 @@ options:
 
 Every stage ends with this 5-part structure:
 
-### Part 0: Enter the approval gate (mandatory — the engine records the held gate before the human answers it)
+### Part 0: Enter the approval gate (mandatory: the held gate is recorded before the human answers it)
 Entering the gate:
 1. Render Parts 1-2 (announcement, summary), then run the §13 learnings ritual as its own human turn — END YOUR TURN at its question. Its logged `QUESTION_ANSWERED` row must precede the gate's `STAGE_AWAITING_APPROVAL` (§13 step 3 is the contract; the gate is never opened in the same message as the learnings question).
-2. After the learnings answer is logged: `bun .claude/tools/aidlc-orchestrate.ts report --stage <slug> --result awaiting-approval` — the engine marks `[-]` → `[?]` and emits `STAGE_AWAITING_APPROVAL`. `/aidlc --status` now truthfully shows the held gate.
-3. Present Part 3 (the approval question). This is a lifecycle gate, not an interview question: do not call `aidlc-log.ts decision` or `aidlc-log.ts answer` for it.
+2. After the learnings answer is logged: `bun .claude/tools/aidlc-orchestrate.ts report --stage <slug> --result awaiting-approval` marks `[-]` -> `[?]` and emits `STAGE_AWAITING_APPROVAL`. `/aidlc --status` now truthfully shows the held gate. These are internal bookkeeping steps: run them, never narrate them.
+3. Present Part 3 (the approval question). This is a lifecycle gate, not an interview question: do not call `aidlc-log.ts decision` or `aidlc-log.ts answer` for it. Word it per the voice contract at the top of this file: what you produced, what to look at, what happens next.
 4. Based on the user response:
-   - **Approve** → `bun .claude/tools/aidlc-orchestrate.ts report --stage <slug> --result approved --user-input "<exact choice>"`. The engine emits any missing `STAGE_AWAITING_APPROVAL`, then `GATE_APPROVED` + `STAGE_COMPLETED`, and auto-advances to the next in-scope stage (or completes the workflow on the final stage). No separate `advance` call required.
-   - **Request Changes** → `bun .claude/tools/aidlc-orchestrate.ts report --stage <slug> --result rejected --user-input "<feedback>"`. The engine emits `GATE_REJECTED` + `STAGE_REVISING`, marks `[?]` → `[R]`, and increments Revision Count. When the feedback already names what to change, revise immediately; ask a clarifying question first ONLY when the feedback is genuinely ambiguous, and ask it as a structured question with concrete options drawn from the artifact (never an open-ended freeform prompt — a driver or scripted session that answers only structured questions must be able to progress the revision loop). When the revision changed a `produces[]` artifact and the directive carries a reviewer, re-run the §12a reviewer step before reporting revised — fresh dispatch record, fresh `## Review` verdict replacing the stale one; the NOT-READY lead-alone loop and its iteration budget apply as at first entry. (The §13 learnings ritual runs once per stage and is not re-run.) Then call `bun .claude/tools/aidlc-orchestrate.ts report --stage <slug> --result revised` to emit a fresh `STAGE_AWAITING_APPROVAL` and mark `[R]` → `[?]` — always re-present the gate after the revision; never leave the stage parked in `[R]` waiting on further conversation.
+   - **Approve** → `bun .claude/tools/aidlc-orchestrate.ts report --stage <slug> --result approved --user-input "<exact choice>"`. That call emits any missing `STAGE_AWAITING_APPROVAL`, then `GATE_APPROVED` + `STAGE_COMPLETED`, and auto-advances to the next in-scope stage (or completes the workflow on the final stage). No separate `advance` call required.
+   - **Request Changes** → `bun .claude/tools/aidlc-orchestrate.ts report --stage <slug> --result rejected --user-input "<feedback>"`. That call emits `GATE_REJECTED` + `STAGE_REVISING`, marks `[?]` → `[R]`, and increments Revision Count. When the feedback already names what to change, revise immediately; ask a clarifying question first ONLY when the feedback is genuinely ambiguous, and ask it as a structured question with concrete options drawn from the artifact (never an open-ended freeform prompt — a driver or scripted session that answers only structured questions must be able to progress the revision loop). When the revision changed a `produces[]` artifact and the directive carries a reviewer, re-run the §12a reviewer step before reporting revised — fresh dispatch record, fresh `## Review` verdict replacing the stale one; the NOT-READY lead-alone loop and its iteration budget apply as at first entry. (The §13 learnings ritual runs once per stage and is not re-run.) Then call `bun .claude/tools/aidlc-orchestrate.ts report --stage <slug> --result revised` to emit a fresh `STAGE_AWAITING_APPROVAL` and mark `[R]` → `[?]` — always re-present the gate after the revision; never leave the stage parked in `[R]` waiting on further conversation.
    - **Accept as-is** (after 3 rejection cycles) → same as Approve; include `--user-input "Accept as-is after N cycles"`.
 
 ### Part 1: Announcement (mandatory)
@@ -181,9 +225,9 @@ Structured bullet-point summary of what was produced:
   | requirements-analysis-questions.md | 5 questions, all answered |
   ```
 - For the FIRST completion message of a session (typically Requirements Analysis or Workspace Detection), include:
-  "**Project depth**: [Minimal/Standard/Comprehensive] — depth adapts artifact detail.
-  **Test strategy**: [Minimal/Standard/Comprehensive] — test strategy controls test volume.
-  You can request different depth or test strategy at any approval gate."
+  "**Project depth**: [Minimal/Standard/Comprehensive]: how much detail I write into each document.
+  **Test strategy**: [Minimal/Standard/Comprehensive]: how many tests I write.
+  Ask me to change either one at any approval gate."
 
 ### Part 3: Review + Approval (mandatory)
 ```markdown
@@ -204,10 +248,11 @@ in-scope progress with overall shown parenthetically:
 ```
 Progress: [X]/[S] in-scope stages complete ([N]/32 overall) | [phase-N]/[phase-total] [Phase]. Next: [Next Stage Name]
 ```
-Where `S` = total `EXECUTE` stages for the current scope, derived from the
-compiled scope grid. Use `bun .claude/tools/aidlc-utility.ts
-scope-table` when you need the current totals; never carry a hand-maintained
-per-scope count table in this protocol.
+Keep this format exactly as shown. `S` = the number of stages this workflow
+actually runs, read from the current scope's compiled totals. Use `bun
+.claude/tools/aidlc-utility.ts scope-table` when you need those
+totals; never carry a hand-maintained per-scope count table in this protocol,
+and never narrate where the number came from.
 
 Example (full-scope): "Progress: 13/32 overall | 3/7 IDEATION stages complete. Next: Approval & Handoff"
 Example (reduced-scope): "Progress: 5/8 in-scope stages complete (7/32 overall) | 2/3 CONSTRUCTION. Next: Build & Test"
@@ -940,9 +985,9 @@ To prevent context overflow in subagent calls:
 ### Subagent failure recovery
 If a Task tool call fails (timeout, error, or returns truncated/incomplete output):
 1. **Retry once** with a reduced context prompt — summarize inception-phase artifacts instead of including full content, pass only the current unit's design artifacts
-2. If the retry also fails, **inform the user** and offer two options via a structured question:
-   - "Run inline" — execute the stage work directly in the orchestrator conversation (slower but avoids subagent issues)
-   - "Skip and revisit" — mark the stage as incomplete and continue; return to it later
+2. If the retry also fails, **tell the user plainly what failed** and offer two options via a structured question:
+   - "Run it here": do the stage's work in this conversation instead of handing it off; slower, but it sidesteps whatever is failing
+   - "Skip and revisit": leave the stage unfinished, keep going, and come back to it later
 3. Log the failure and resolution in `<record>/audit/<host>-<clone>.md` using the Error log format
 
 ---
@@ -1004,7 +1049,7 @@ If the `run-stage` directive includes a `reviewer` field (non-null), the orchest
      - Return to step 1 (re-invoke reviewer)
    - **NOT-READY** and iterations exhausted:
      - Proceed to approval gate with unresolved findings noted:
-       "Reviewer found issues after N iterations. Presenting with unresolved findings for your decision."
+       "I had this reviewed N times and some concerns are still open. Here they are, so you can decide whether they matter."
 
 The reviewer also re-runs on the Part 0 revision path: when a human rejection
 leads to a revision that changes a `produces[]` artifact, re-run this step
