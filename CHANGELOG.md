@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.36] - 2026-08-02
+
+A new intent's record dir now shows only the phases your scope actually runs, and the framework no longer ships 26 permanently empty directories. Previously every record was created with all five phase folders, so a `bugfix` workflow opened with an empty `ideation/` and `operation/` sitting next to the folders it would really use, reading as planned-then-abandoned work; the same scope decision was already recorded as `PHASE_SKIPPED` in the audit trail, so the folders and the trail disagreed. The folders created and the phases reported skipped are now derived from one place, so they always agree. **Upgrade:** re-copy your `dist/<harness>/` shell into the project to drop the dead `tools/data/scaffold/` directories from the install. Existing intent records are untouched: nothing is ever deleted, so a record already carrying all five phase folders keeps them, and you can remove an empty one by hand if you want.
+
+* Creating an intent now makes one artifact folder per phase the scope runs, plus `verification/` (created for every scope). A `bugfix` or `refactor` record has no `ideation/` or `operation/` folder at all; a `feature` or `enterprise` record still has all five.
+* The `WORKSPACE_SCAFFOLDED` and stage-completion audit entries now report how many in-scope phase folders were created, instead of implying a fixed set.
+* Removed `tools/data/scaffold/`, 26 empty directories shipped in every harness tree that no code read. Nothing referenced them; a fresh copy of `dist/<harness>/` simply no longer contains them.
+* Per-stage folders were never created up front and still are not: a stage's folder appears when it first writes an artifact. The user guide, CLI reference, orchestrator reference, and the Workspace Scaffold stage text said otherwise and are corrected.
+
 ## [2.5.33] - 2026-08-01
 
 Stage rules are now delivered deterministically instead of depending on the conductor choosing to read paths. The engine emits the active-space rule bundle as bounded `load-steering` directives before `run-stage`, and reviewer checklists are absorbed into reviewer agent bodies at build time - closing the observed skip where stages ran with none of their org/phase memory applied. **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the updated engine, skills, agents, and hooks are installed.

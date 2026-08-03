@@ -35,16 +35,21 @@ The three initialization stages run deterministically inside `aidlc-utility inte
 
 ### Stage 0.1: Workspace Scaffold
 
-The framework births the first intent and creates its record dir at `aidlc/spaces/<space>/intents/<YYMMDD>-<label>/` (the `<space>` is `default` unless you use a named space):
+The framework creates the first intent and its record dir at `aidlc/spaces/<space>/intents/<YYMMDD>-<label>/` (the `<space>` is `default` unless you use a named space). It creates one folder per phase your scope actually runs, so the record shows the plan rather than every phase that exists. A `feature` scope runs all five; a `bugfix` scope skips Ideation and Operation, so those folders never appear:
 
 ```
-Intent born — record dir scaffolded:
-  aidlc/spaces/default/intents/<YYMMDD>-<label>/initialization/   (3 stage artifact dirs)
-  aidlc/spaces/default/intents/<YYMMDD>-<label>/ideation/         (7 stage artifact dirs)
-  ...
+Intent created, record dir at aidlc/spaces/default/intents/<YYMMDD>-<label>/
+  initialization/
+  inception/
+  construction/
+  verification/
 Space-level dirs ensured:
-  aidlc/spaces/default/knowledge/                             (team knowledge — empty; you add files)
+  aidlc/spaces/default/knowledge/    (team knowledge, empty; you add files)
 ```
+
+Per-stage folders are not created up front. A stage's folder (for example
+`inception/requirements-analysis/`) appears the first time that stage writes an
+artifact, so the record only ever lists work that produced something.
 
 ### Stage 0.2: Workspace Detection
 

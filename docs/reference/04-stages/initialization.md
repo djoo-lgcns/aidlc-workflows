@@ -2,7 +2,7 @@
 
 ## Phase Overview
 
-The Initialization phase is the first of five phases in the AI-DLC workflow. It runs stages 0.1 through 0.3, **birthing the intent** — minting its record dir at `aidlc/spaces/<space>/intents/<YYMMDD>-<label>/` (written `<record>/` below) with state files, directory scaffolding, workspace classification, and routing configuration. There is no separate scaffold command: the workspace shell ships pre-built in `dist/<harness>/`, and the engine auto-births the first intent on the first `/aidlc` (or when you describe what to build).
+The Initialization phase is the first of five phases in the AI-DLC workflow. It runs stages 0.1 through 0.3, **birthing the intent**, minting its record dir at `aidlc/spaces/<space>/intents/<YYMMDD>-<label>/` (written `<record>/` below) with state files, one directory per in-scope phase, workspace classification, and routing configuration. There is no separate scaffold command: the workspace shell ships pre-built in `dist/<harness>/`, and the engine auto-births the first intent on the first `/aidlc` (or when you describe what to build).
 
 All 3 stages in this phase execute for EVERY scope — there are no conditional stages. All stages auto-proceed with no approval gates.
 
@@ -48,7 +48,7 @@ All three stages run inside a single deterministic `bun .claude/tools/aidlc-util
 
 ### Steps
 1. Create `<record>/` directory if needed
-2. Create stage artifact directories for all 5 phases + `<record>/verification/`
+2. Create an artifact directory for each phase the scope runs, plus `<record>/verification/`
 3. Create the empty space-level `aidlc/knowledge/` directory (free-form; no per-agent subdirs, no READMEs)
 4. Create the intent's `audit/` shard dir header + emit `WORKFLOW_STARTED`
 5. Append `STAGE_STARTED` + `WORKSPACE_SCAFFOLDED` + `STAGE_COMPLETED` events
@@ -57,8 +57,8 @@ All three stages run inside a single deterministic `bun .claude/tools/aidlc-util
 - None (entry point)
 
 ### Outputs
-- `<record>/initialization/`, `ideation/`, `inception/`, `construction/`, `operation/` with stage subdirectories
-- `<record>/verification/`
+- one artifact directory per phase the scope runs: `<record>/initialization/`, plus each of `ideation/`, `inception/`, `construction/`, `operation/` holding at least one EXECUTE stage. A phase the scope excludes gets no directory (a bugfix record has no `ideation/` or `operation/`), and per-stage subdirectories are not created here: a stage's directory appears when it first writes an artifact
+- `<record>/verification/` (created for every scope)
 - the empty space-level `aidlc/knowledge/` directory (a sibling of the space's `intents/`)
 - the intent's `audit/` shard dir (header + session + scaffold events)
 

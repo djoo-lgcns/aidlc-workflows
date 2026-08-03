@@ -3408,22 +3408,48 @@ function gitRmFlatTree(projectDir: string, flatTree: string): void {
   }
 }
 
-// Ensure the dirs a workflow writes into exist. Idempotent ensure-exists (NOT
-// the old data/scaffold copy — SEED ships the shell). Creates the active intent's
-// record dir plus its per-phase artifact dirs, AND the SPACE-level domain
+// The phases a scope actually runs: those holding at least one EXECUTE stage.
+// This is the SINGLE derivation behind two decisions that must never disagree:
+// which per-phase dirs a new record gets (ensureWorkspaceDirs) and which phases
+// report PHASE_SKIPPED at birth. Both read the compiled scope grid via
+// stagesInScope, so the folders on disk and the audit trail always tell the same
+// story, with no LLM input in the path. A phase whose stage set is empty under
+// the enabled bundle (plugin selection can empty one) has nothing to write and
+// is likewise out.
+function phasesWithExecuteStages(scope: string): Set<string> {
+  const stages = stagesInScope(scope);
+  return new Set(
+    PHASES.filter((phase) =>
+      stages.some((s) => s.phase === phase && s.action === "EXECUTE")
+    )
+  );
+}
+
+// Ensure the dirs a workflow writes into exist. Idempotent ensure-exists (SEED
+// ships the shell). Creates the active intent's record dir plus a per-phase
+// artifact dir for each phase the SCOPE RUNS, AND the SPACE-level domain
 // knowledge/ dir (a sibling of intents, not a record subdir); all skipped if
 // already present. The active-intent cursor must be set (birthIntent/migration
 // did so) before this runs.
-function ensureWorkspaceDirs(projectDir: string): void {
+//
+// Scope-excluded phases get NO folder: an empty `operation/` in a bugfix record
+// reads as work that was planned and skipped, when that phase was never in the
+// plan. Nothing depends on the folder pre-existing: a stage artifact is written
+// by the agent's own file tool, which creates its parent chain on first write,
+// and every deterministic reader of a phase dir guards on existence. This only
+// ever creates: an older record that already carries all five keeps them.
+function ensureWorkspaceDirs(projectDir: string, scope: string): void {
   // docsDir() default-resolves the active intent's record dir (or the flat
   // fallback when no intent resolves) — the cursor set by birthIntent/migration
   // points it at the born intent.
   const record = docsDir(projectDir);
   mkdirSync(record, { recursive: true });
-  // Lazy per-phase artifact dirs (the engine/stages write reports here).
-  for (const phase of PHASES) {
+  // Lazy per-phase artifact dirs, in-scope phases only (stages write reports here).
+  for (const phase of phasesWithExecuteStages(scope)) {
     mkdirSync(join(record, phase), { recursive: true });
   }
+  // verification/ is scope-independent: sensor and gate verification can land
+  // for any phase, so every record gets it.
   mkdirSync(join(record, "verification"), { recursive: true });
   // SPACE-level domain knowledge dir (NOT per-intent): vision §"Spaces" makes
   // knowledge a sibling of memory/codekb/intents under spaces/<space>/, so team
@@ -3469,9 +3495,9 @@ function ensureWorkspaceDirs(projectDir: string): void {
 // bucket (invariant 2), so two concurrent first-runs are serialized and BOTH
 // births land distinct uuids/dirs/rows with no lost update.
 //
-// The data/scaffold dir-copy + knowledge READMEs that the old `--init` shipped
-// are gone: the workspace shell (spaces/default/memory, native includes) ships
-// in dist/ (SEED), and lazy per-intent/codekb/knowledge dirs are ensure-exists
+// The directory-tree copy + knowledge READMEs that the old `--init` shipped are
+// gone: the workspace shell (spaces/default/memory, native includes) ships in
+// dist/ (SEED), and lazy per-intent/codekb/knowledge dirs are ensure-exists
 // (created on demand). What stays is the scope→stage state-build that routes
 // the workflow to its first post-init stage — relocated here, now writing into
 // the BORN intent's record (the active-intent cursor set first makes the
@@ -3605,12 +3631,14 @@ function handleIntentBirth(projectDir: string, flags: Record<string, string>): v
 
     // PHASE_SKIPPED — one per phase the scope excludes entirely (no EXECUTE
     // stages in that phase). Captures the scope decision at workflow birth so
-    // you don't have to derive it later by diffing the stage list.
+    // you don't have to derive it later by diffing the stage list. Shares
+    // phasesWithExecuteStages with the folder creation below, so a phase that
+    // reports skipped here is exactly a phase that gets no folder.
+    const runningPhases = phasesWithExecuteStages(scope);
     for (const phase of PHASES) {
       if (phase === "initialization") continue;
       const inPhase = stagesInScope(scope).filter((s) => s.phase === phase);
-      const anyExecute = inPhase.some((s) => s.action === "EXECUTE");
-      if (!anyExecute && inPhase.length > 0) {
+      if (!runningPhases.has(phase) && inPhase.length > 0) {
         appendAuditEvent(projectDir, "PHASE_SKIPPED", {
           Phase: phase,
           Scope: scope,
@@ -3624,20 +3652,22 @@ function handleIntentBirth(projectDir: string, flags: Record<string, string>): v
       Agent: "orchestrator",
     });
 
-    // ---- Ensure-exists scaffold (lazy; SEED ships the shell) ----
+    // ---- Ensure-exists record dirs (lazy; SEED ships the shell) ----
     // The shipped shell already carries spaces/default/memory + native includes.
-    // Birth only ensures the per-intent artifact dirs + the space-level knowledge/
-    // dir the workflow will write into exist; it never re-copies the data/scaffold
-    // tree (SEED owns that). All idempotent — skip any dir that already exists.
-    ensureWorkspaceDirs(projectDir);
+    // Birth only ensures the dirs this workflow will write into: an artifact dir
+    // per IN-SCOPE phase (a scope-excluded phase gets none), verification/, and
+    // the space-level knowledge/ dir. All idempotent: skip any dir that already
+    // exists, and never remove one.
+    ensureWorkspaceDirs(projectDir, scope);
 
+    const phaseDirDetail = `${runningPhases.size} in-scope phase dirs + verification/ + space-level knowledge/ ensured`;
     appendAuditEvent(projectDir, "WORKSPACE_SCAFFOLDED", {
       Request: `/aidlc ${flags.arguments || scope}`,
-      Details: "Per-intent artifact dirs + space-level knowledge/ ensured (shell shipped by SEED)",
+      Details: `${phaseDirDetail} (shell shipped by SEED)`,
     });
     appendAuditEvent(projectDir, "STAGE_COMPLETED", {
       Stage: "workspace-scaffold",
-      Details: "Per-intent artifact dirs + space-level knowledge/ ensured",
+      Details: phaseDirDetail,
     });
 
     handleIntentBirthStateBuild(projectDir, flags, scope, ts);
