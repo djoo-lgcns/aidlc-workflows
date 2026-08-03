@@ -196,6 +196,14 @@ function emit(directive: Directive): void {
     directive.kind === "run-stage" && runStageRoutes.has(directive)
       ? transportRunStage(directive, runStageRoutes.get(directive)!)
       : directive;
+  // A per-unit Construction beat says nothing: `unit` is present on every
+  // iteration of the same stage (callers attach it after the run-stage is
+  // built), and one spoken sentence per unit would be noise. The settle
+  // directive that closes the stage carries no unit, so the stage still gets
+  // exactly one spoken entry. Silence is a valid narration.
+  if (transported.kind === "run-stage" && transported.unit !== undefined) {
+    delete transported.narration;
+  }
   const result = validateDirective(transported);
   if (!result.valid) {
     console.error(
@@ -286,6 +294,118 @@ function toolErrorMessage(run: ToolRun): string {
   return raw.length > 0 ? raw : run.stdout.trim();
 }
 
+// --- Narration (the spoken line the conductor relays) ---
+//
+// Every line below is authored HERE, next to the facts, because the engine knows
+// them deterministically and the conductor does not have to guess. Left to
+// improvise, the conductor narrates what it can see - the tool it ran, the kind
+// it received, the routing it is following - which is the machinery, not the
+// user's project. These lines describe the work instead.
+//
+// House style for anything added here:
+//   - One sentence. Two only when the second one tells the user what to expect.
+//   - About the user's project, never about this framework's parts. No internal
+//     nouns: the reader has no engine, no directive, no dispatch, no conductor.
+//   - Present tense, first person, plain. "Setting up ...", "Starting ...".
+//   - Name real things by their real names: stage display names, scope names,
+//     and file paths are the user's landmarks and stay verbatim.
+//   - Say nothing a reader would have to already know the framework to parse.
+//
+// A line is deliberately ABSENT for beats that should be silent: rule-bundle
+// transport, per-unit iteration beats, and anything the user did not ask about.
+// Absence is the instruction to say nothing, and it is the common case.
+
+// The user-facing name for a phase. The graph's phase tokens are SHOUTED
+// machine values (IDEATION); spoken prose wants ordinary words.
+function phaseInWords(phase: string): string {
+  const normalized = phase.trim().toLowerCase();
+  if (normalized.length === 0) return "";
+  return normalized;
+}
+
+// The first run-stage of a workflow is the one place a spoken line can set the
+// whole frame: what kind of plan is running, and what the first real step is.
+// Later stages get the shorter per-stage line.
+function narrateStageEntry(
+  node: GraphStage,
+  scope: string,
+  isFirst: boolean,
+  gate: GateValue,
+): string {
+  const stageName = node.name;
+  if (isFirst) {
+    return (
+      `Starting the ${scope} plan for this project. First step is ${stageName}, ` +
+      `and I will stop for your review before anything is final.`
+    );
+  }
+  // A non-gating stage runs straight through, so the line says so rather than
+  // leaving the user waiting for a prompt that is not coming.
+  if (gate === false) {
+    return `Next up: ${stageName}. This one runs through without needing your input.`;
+  }
+  // Who is in the room. On an inline stage the session adopts the lead's
+  // perspective and any supports as further perspectives, and that is worth one
+  // clause: the user is meeting colleagues by trade, which is a fact about their
+  // project's work, where "loaded the persona files" is a fact about ours.
+  return `Now working on ${stageName}, ${peopleClause(node)}.`;
+}
+
+// The trades participating in an inline stage, phrased as a person would:
+// "wearing the product manager hat, with the architect on hand". Falls back to
+// the phase clause when no trade resolves, so a stage never gets a broken line.
+function peopleClause(node: GraphStage): string {
+  const lead = roleInWords(node.lead_agent);
+  if (!lead) return `in the ${phaseInWords(node.phase)} phase`;
+  const supports = (node.support_agents ?? [])
+    .map(roleInWords)
+    .filter((trade) => trade.length > 0);
+  if (supports.length === 0) return `wearing the ${lead} hat`;
+  const list =
+    supports.length === 1
+      ? supports[0]
+      : `${supports.slice(0, -1).join(", ")} and ${supports[supports.length - 1]}`;
+  return `wearing the ${lead} hat, with the ${list} on hand`;
+}
+
+// A dispatched stage hands the work to a named specialist. The user cares that
+// someone with a particular focus is doing it, not that a Task call happened.
+function narrateSpecialistStage(node: GraphStage): string {
+  const role = roleInWords(node.lead_agent);
+  return role
+    ? `Bringing in the ${role} to work on ${node.name}.`
+    : `Now working on ${node.name}.`;
+}
+
+// Turn an agent filename into the TRADE a person would say out loud:
+// aidlc-architect-agent -> "architect", aidlc-product-agent -> "product manager".
+// The user is meeting a colleague, so the words are the ones a colleague would
+// use about themselves; a slug fragment like "product" or "aws platform" is not
+// one. Unmapped names fall back to the de-slugged fragment, and an unfamiliar
+// shape returns "" so the caller can drop the role clause rather than invent it.
+const TRADE_BY_ROLE: Readonly<Record<string, string>> = {
+  product: "product manager",
+  "product lead": "product lead",
+  design: "designer",
+  delivery: "delivery lead",
+  architect: "architect",
+  "architecture reviewer": "architecture reviewer",
+  "aws platform": "platform engineer",
+  compliance: "compliance specialist",
+  devsecops: "security engineer",
+  developer: "developer",
+  quality: "quality engineer",
+  "pipeline deploy": "release engineer",
+  operations: "operations engineer",
+};
+
+function roleInWords(agent: string): string {
+  const match = /^aidlc-(.+)-agent$/.exec(agent.trim());
+  if (!match) return "";
+  const fragment = match[1].replaceAll("-", " ");
+  return TRADE_BY_ROLE[fragment] ?? fragment;
+}
+
 // --- Terminal-directive constructors (the non-run-stage kinds) ---
 
 function askDirective(question: string): AskDirective {
@@ -309,7 +429,15 @@ function shellArg(value: string): string {
 // the slug it parked at; the Stop hook treats `parked` as a terminal allow so
 // the conductor can end its turn at a clean inter-stage boundary.
 function parkedDirective(reason: string, stage: string): ParkedDirective {
-  return { kind: "parked", reason, stage };
+  return {
+    kind: "parked",
+    reason,
+    stage,
+    // Parking is the one stop that a user could mistake for a crash, so the
+    // spoken line says the work is safe and names the way back in.
+    narration:
+      "Pausing here with everything saved. Run `/aidlc --resume` when you want to pick it back up.",
+  };
 }
 
 // The one-line ceremony preview for a scope, deterministic from the compiled
@@ -506,9 +634,16 @@ function createPrintDirective(scope: string, flags: ParsedFlags, description?: s
   // Omit the parenthetical when the scope does not resolve (fixture trees).
   const clause = costClause(scope);
   const cost = clause ? ` (${clause})` : "";
-  return printDirective(
+  const directive = printDirective(
     `Run \`bun ${harnessDir()}/tools/aidlc-utility.ts ${cmd.join(" ")}\` to start the workflow${cost}, then re-run \`next\` to continue.${labelHint}`,
   );
+  // The user named a scope (or one was inferred and confirmed), so the spoken
+  // line can say what is being set up and how much process that means, with the
+  // counts the compiled grid already gave us.
+  directive.narration = clause
+    ? `Setting up a ${scope} workflow for this: ${clause}.`
+    : `Setting up a ${scope} workflow for this.`;
+  return directive;
 }
 
 // The composer-dispatch print for a compose request (the adaptive-workflows
@@ -557,7 +692,15 @@ function composeDispatchDirective(
     `The composer runs \`bun ${hd}/tools/aidlc-utility.ts detect --json\` (read-only scan + scope-registry paths), estimates the five entropy components (intent ambiguity, structural uncertainty, verification entropy, risk, unresolved assumptions) per its persona, and returns a structured proposal: mode matched|custom, scopeName, an ars block (the five component scores with method codekb|fallback), an arsRationale, the per-stage EXECUTE/SKIP grid, a per-SKIP rationale, a summary the validator computed, and two pre-rendered markdown tables (ARS scores with bands; per-stage decisions with reasoning).`,
     "Render the proposal to the human as THREE blocks before the approve/edit/reject gate (see the composer block in SKILL.md), leading with plain language rather than the scores: (1) a two-or-three-sentence recommendation in your own words - what kind of change this looks like, how much process you suggest, and the steps in plain terms - followed by the validator's summary line formatted \"<execute> stages EXECUTE / <skip> SKIP, <gates> approval gates\" plus scopeName and mode (a matched stock scope stays matched: presentation never changes the composer's matched-vs-custom verdict, and a MATCHED proposal writes no scope file); (2) the composer's stage-decision table verbatim, with any fold advisories beneath it; (3) under a \"Scoring detail (advisory)\" heading, the composer's ARS score table verbatim with its method line and arsRationale. Relay the composer's tables and numbers as returned - never recompute, collapse into prose, or drop them. Do NOT write any file and do NOT advance any stage before an explicit approval.",
   );
-  return printDirective(parts.join(" "));
+  const directive = printDirective(parts.join(" "));
+  // This is the moment issue 682's reporter described: the user has asked for a
+  // plan and the framework goes quiet while it works one out. Say what is
+  // happening in their terms. In-flight means a plan is already running and only
+  // the not-yet-run steps are on the table.
+  directive.narration = inFlight
+    ? "Looking at what is left to do and working out which of the remaining steps still earn their place. I will show you the change before anything moves."
+    : "Working out which steps of the development process this piece of work actually needs, based on what you have asked for and what is already in the codebase. I will show you the plan before anything runs.";
+  return directive;
 }
 
 // Guard the birth gate against a DUPLICATE intent on a fresh clone of a
@@ -1592,10 +1735,18 @@ function buildRunStageDirective(
   // `forcePersona` covers the isolated single-stage runner, whose directive is
   // always the conductor's first of that run regardless of state - attached
   // HERE (not by the caller after build) so the final run-stage is complete.
-  if (forcePersona || isFirstRunStageOfWorkflow(stateContent, node)) {
+  const firstOfWorkflow = isFirstRunStageOfWorkflow(stateContent, node);
+  if (forcePersona || firstOfWorkflow) {
     const persona = readConductorPersona();
     if (persona !== null) directive.conductor_persona = persona;
   }
+  // The spoken line for entering this stage. Attached here, where the scope and
+  // first-of-workflow facts are in hand; emit() drops it again on a per-unit
+  // iteration beat, because callers set `unit` after this builder returns.
+  directive.narration =
+    node.mode === "subagent" || node.mode === "pipeline"
+      ? narrateSpecialistStage(node)
+      : narrateStageEntry(node, scope, firstOfWorkflow, directive.gate);
   if (codekbCtx) {
     runStageRoutes.set(directive, {
       node,
@@ -2572,6 +2723,10 @@ function handleNext(args: string[], projectDir: string | undefined): void {
     emit({
       kind: "done",
       reason: `Workflow complete — no in-scope stage remains after ${currentSlug} (scope: ${scope}).`,
+      // The genuine end of the work. The other `done` emissions in this file are
+      // loop bookkeeping (a report landed, a read-only command already ran) and
+      // stay silent: the user did not ask about the round-trip.
+      narration: "That is everything on the plan. Your work is finished and written up.",
     });
     return;
   }
