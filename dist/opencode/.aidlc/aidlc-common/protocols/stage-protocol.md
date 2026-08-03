@@ -40,6 +40,20 @@ so they can open them. Never explain the gate's machinery to justify asking.
 report an error** (they need the specific command or path to fix it). Even
 then the FIRST sentence is plain language; the specifics follow it.
 
+**In Construction, the loop's bookkeeping is internal.** This phase repeats the
+same stage once per piece of work, and the machinery that drives the repetition
+is the largest pile of internal detail in the framework: which pass of the
+iteration this is, what a continuation token carries, whether a gate has
+resolved yet and to what, what a stage's `produces` list came out as, whether a
+design stage applies to this piece of work at all. None of it is spoken, in any
+words. A plain-language retelling is not an improvement on it, because the
+problem was never the vocabulary: the user has no iteration and no gate
+boolean, so there is nothing here to tell them. What IS theirs is which piece
+of their work is being built and which stage is running on it, and on a
+re-entry the directive's `narration` value already says exactly that. Where a
+directive carries no line, one sentence naming the piece being built is the
+ceiling, and silence is the ordinary case.
+
 Two things this contract does NOT change. Print a message a tool tells you to
 print VERBATIM: those strings are the tool's own wording, not yours to
 paraphrase. And keep every audit event name, state marker, tool flag, file
