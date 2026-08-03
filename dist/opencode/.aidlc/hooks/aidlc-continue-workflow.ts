@@ -107,7 +107,7 @@ import {
   harnessDir,
 } from "../tools/aidlc-lib.ts";
 
-const HOOK_NAME = "stop";
+const HOOK_NAME = "continue-workflow";
 
 // The block-cap ceiling: the maximum number of consecutive no-progress blocks
 // before the hook releases the session. Exposed as an env var so a fork can

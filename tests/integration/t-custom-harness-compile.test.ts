@@ -603,7 +603,7 @@ outputs: none
       // dispatcher's missing-script reason (advisory surface, not silent). P4:
       // .aidlc-hooks-health/ resolves under the born intent's record (hooksHealthDir
       // → docsRoot), so read it from the per-intent record after init.
-      const dropFile = join(recordDirOf(proj), ".aidlc-hooks-health", "sensor-fire.drops");
+      const dropFile = join(recordDirOf(proj), ".aidlc-hooks-health", "run-sensors.drops");
       expect(existsSync(dropFile)).toBe(true);
       const drops = readFileSync(dropFile, "utf8");
       expect(drops).toContain(CUSTOM_SENSOR_ID);

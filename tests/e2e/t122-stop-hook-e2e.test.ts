@@ -164,7 +164,7 @@ const guardPath = (proj: string): string =>
 const heartbeatPath = (proj: string): string =>
   join(hooksHealthDir(proj), "continue-workflow.last");
 const dropsPath = (proj: string): string =>
-  join(hooksHealthDir(proj), "stop.drops");
+  join(hooksHealthDir(proj), "continue-workflow.drops");
 
 // Known-answer literals from the SHIPPED handlers (see header for cites).
 const STATUS_COMPLETED_LINE = "Status:         Completed"; // utility.ts:302 (padEnd shape confirmed by direct run)

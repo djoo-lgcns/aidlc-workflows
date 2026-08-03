@@ -512,7 +512,7 @@ describe("t37 aidlc-utility doctor — graph-level checks", () => {
     const p = track(createTestProject());
     const healthDir = hooksHealthDir(p);
     mkdirSync(healthDir, { recursive: true });
-    writeFileSync(join(healthDir, "stop.drops"), "", "utf-8");
+    writeFileSync(join(healthDir, "continue-workflow.drops"), "", "utf-8");
     const r = doctor(p);
     expect(r.out).toContain("Hook drops: none recorded");
   });
@@ -525,7 +525,7 @@ describe("t37 aidlc-utility doctor — graph-level checks", () => {
     // reached its TAB; the label must not splice the raw fragment where a
     // timestamp is promised.
     writeFileSync(
-      join(healthDir, "sensor-fire.drops"),
+      join(healthDir, "run-sensors.drops"),
       "2026-07-01T10:00:00Z\tsensor dispatch failed\n" +
         "sensor dispatch failed: ENOSP",
       "utf-8",

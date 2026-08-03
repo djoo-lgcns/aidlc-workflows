@@ -260,7 +260,7 @@ function spawnArgvs(proj: string): string[][] {
 }
 
 function dropsPath(proj: string): string {
-  return join(seededRecordDir(proj), ".aidlc-hooks-health", "sensor-fire.drops");
+  return join(seededRecordDir(proj), ".aidlc-hooks-health", "run-sensors.drops");
 }
 
 describe("t95 sensor-fire hook — single & multi-entry fire (mechanism cli — spawnSync)", () => {
