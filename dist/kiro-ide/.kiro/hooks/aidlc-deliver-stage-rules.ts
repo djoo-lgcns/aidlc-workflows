@@ -109,7 +109,11 @@ function bundleBlock(stage: string, content: RuleContent[]): string {
   return (
     `\n\n<!-- AIDLC_DISPATCH_RULES_BEGIN sha256:${digest} stage:${stage} -->\n` +
     "## Active AI-DLC Rule Bundle\n" +
-    "The engine resolved the following required rules for this stage. Apply the content verbatim; later prose summaries do not replace it.\n" +
+    // Framing only. The heading above is pinned (t248) and the rule text below is
+    // delivered verbatim; this sentence is the part a reader sees, so it says what
+    // the rules ARE rather than which component resolved them. A recipient that
+    // quotes its context back into chat then quotes nothing about the machinery.
+    "These are the required rules for this stage. Apply the content verbatim; later prose summaries do not replace it.\n" +
     body +
     `\n<!-- AIDLC_DISPATCH_RULES_END sha256:${digest} -->`
   );
