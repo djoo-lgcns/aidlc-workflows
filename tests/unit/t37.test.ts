@@ -494,13 +494,13 @@ describe("t37 aidlc-utility doctor — graph-level checks", () => {
     // active-intent cursor) and the line format (ISO timestamp, TAB, reason);
     // writing through recordHookDrop binds the reader to the writer's actual
     // format so the two cannot drift with tests still green.
-    recordHookDrop(p, "audit-logger", "audit emission failed: EACCES");
-    recordHookDrop(p, "audit-logger", "audit emission failed: disk full");
+    recordHookDrop(p, "write-audit-log", "audit emission failed: EACCES");
+    recordHookDrop(p, "write-audit-log", "audit emission failed: disk full");
     const r = doctor(p);
     expect(r.out).toContain("Hook drops recorded (advisory)");
     // Count is exact; the timestamp is whatever isoTimestamp() minted, so pin
     // the shape (the probe's own timestamp gate) rather than a literal value.
-    expect(r.out).toMatch(/audit-logger x2 \(last \d{4}-\d{2}-\d{2}T[\d:]+Z\)/);
+    expect(r.out).toMatch(/write-audit-log x2 \(last \d{4}-\d{2}-\d{2}T[\d:]+Z\)/);
     // Advisory: the drops row itself must not flip doctor's exit code - compare
     // against the same project WITHOUT the drop file rather than pinning an
     // absolute status (the bare fixture may fail other probes either way).
@@ -531,7 +531,7 @@ describe("t37 aidlc-utility doctor — graph-level checks", () => {
       "utf-8",
     );
     const r = doctor(p);
-    expect(r.out).toContain("sensor-fire x2 (last unparseable line)");
+    expect(r.out).toContain("run-sensors x2 (last unparseable line)");
     expect(r.out).not.toContain("(last sensor dispatch failed: ENOSP)");
   });
 });
