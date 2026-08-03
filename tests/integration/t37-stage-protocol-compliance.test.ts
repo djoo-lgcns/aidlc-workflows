@@ -302,37 +302,33 @@ describe("protocol §5 + conductor forbid dispatching inline support agents", ()
   );
   const conductor = read(CONDUCTOR);
 
-  // The wording moved from "dispatch" to "hand off" in the voice/register pass
-  // (the instruction register is what the model echoes into chat). The CONTRACT
-  // is unchanged and is what these pin: no support-agent hand-off on an inline
-  // stage, and the live session is the only delegator.
-  test("protocol §5 forbids handing off to a support agent on an inline stage [.sh multi-agent 1]", () => {
+  test("protocol §5 forbids dispatching a support agent on an inline stage [.sh multi-agent 1]", () => {
     expect(
       multiAgent.includes(
-        "Do NOT hand off to a support agent on an inline stage",
+        "Do NOT dispatch a support agent on an inline stage",
       ),
     ).toBe(true);
   });
-  test("protocol §5 keeps the live session the only delegator [.sh multi-agent 2]", () => {
+  test("protocol §5 keeps the conductor the only delegator [.sh multi-agent 2]", () => {
     expect(
-      multiAgent.includes("only you delegate"),
+      multiAgent.includes("only the orchestrator delegates"),
     ).toBe(true);
   });
-  test("execution-quality charter forbids handing off on an inline stage [.sh conductor 1]", () => {
+  test("conductor forbids dispatching a support agent on an inline stage [.sh conductor 1]", () => {
     expect(
       conductor.includes(
-        "Do **not** hand off to a support agent on an inline stage",
+        "Do **not** dispatch a support agent on an inline stage",
       ),
     ).toBe(true);
   });
-  test("charter keeps agents from invoking each other [.sh conductor 2]", () => {
+  test("conductor keeps agents from invoking each other [.sh conductor 2]", () => {
     // Normalize the source's hard wraps so the assertion pins the whole
     // sentence — the delegation clause included — regardless of where the
     // line breaks fall (the pre-fix || fallback silently dropped the
     // "only you, the conductor, delegate" pin when the wrap moved).
     const flowed = conductor.replace(/\s+/g, " ");
     expect(flowed).toContain(
-      "Agents never invoke each other — only you delegate.",
+      "Agents never invoke each other — only you, the conductor, delegate.",
     );
   });
 });

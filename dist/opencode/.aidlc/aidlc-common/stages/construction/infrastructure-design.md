@@ -66,11 +66,11 @@ MANDATORY: Follow stage-protocol.md for approval gates, question format, and com
 
 ### Execution Modes
 
-This stage supports two execution modes, and you choose which one runs:
+This stage supports two execution modes, controlled by the orchestrator:
 
 **QUESTION-ONLY mode** (invoked by orchestrator during a Bolt's question phase):
 Execute Steps 1–4 only (load personas, read artifacts, generate questions, collect answers).
-Do NOT proceed to design or artifact generation. Stop there and pick the flow back up.
+Do NOT proceed to design or artifact generation. Return control to the orchestrator.
 
 **ARTIFACT-ONLY mode** (invoked by orchestrator during a Bolt's design phase):
 Skip Steps 1–4 (questions already collected and approved).

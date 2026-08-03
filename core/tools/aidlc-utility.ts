@@ -4911,7 +4911,10 @@ function handleSetStatus(projectDir: string, flags: Record<string, string>): voi
     process.env.AIDLC_STATUSLINE_OWNER !== `statusline:${process.ppid}`
   ) {
     die(
-      "Direct aidlc-utility set-status is blocked: status synchronization is owned by the sync-workflow-state hook. You do not need to run this - the status updates by itself when a stage starts and when you report an outcome. Run /aidlc --status to see where the workflow is.",
+      "Direct aidlc-utility set-status is blocked: there is nothing for you to do here. " +
+        "The workflow's position updates on its own as stages start and outcomes are reported. " +
+        "Run /aidlc --status to see where things stand. " +
+        "(status synchronization is owned by the sync-workflow-state hook.)",
     );
   }
   const sp = stateFilePath(projectDir, flags.intent, flags.space);
