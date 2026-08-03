@@ -344,7 +344,28 @@ function narrateStageEntry(
   if (gate === false) {
     return `Next up: ${stageName}. This one runs through without needing your input.`;
   }
-  return `Now working on ${stageName}, in the ${phaseInWords(node.phase)} phase.`;
+  // Who is in the room. On an inline stage the session adopts the lead's
+  // perspective and any supports as further perspectives, and that is worth one
+  // clause: the user is meeting colleagues by trade, which is a fact about their
+  // project's work, where "loaded the persona files" is a fact about ours.
+  return `Now working on ${stageName}, ${peopleClause(node)}.`;
+}
+
+// The trades participating in an inline stage, phrased as a person would:
+// "wearing the product manager hat, with the architect on hand". Falls back to
+// the phase clause when no trade resolves, so a stage never gets a broken line.
+function peopleClause(node: GraphStage): string {
+  const lead = roleInWords(node.lead_agent);
+  if (!lead) return `in the ${phaseInWords(node.phase)} phase`;
+  const supports = (node.support_agents ?? [])
+    .map(roleInWords)
+    .filter((trade) => trade.length > 0);
+  if (supports.length === 0) return `wearing the ${lead} hat`;
+  const list =
+    supports.length === 1
+      ? supports[0]
+      : `${supports.slice(0, -1).join(", ")} and ${supports[supports.length - 1]}`;
+  return `wearing the ${lead} hat, with the ${list} on hand`;
 }
 
 // A dispatched stage hands the work to a named specialist. The user cares that
@@ -356,13 +377,33 @@ function narrateSpecialistStage(node: GraphStage): string {
     : `Now working on ${node.name}.`;
 }
 
-// Turn an agent filename into the role a person would say out loud:
-// aidlc-architect-agent -> "architect". Returns "" when the shape is unfamiliar,
-// so the caller falls back to a line that names no role rather than a wrong one.
+// Turn an agent filename into the TRADE a person would say out loud:
+// aidlc-architect-agent -> "architect", aidlc-product-agent -> "product manager".
+// The user is meeting a colleague, so the words are the ones a colleague would
+// use about themselves; a slug fragment like "product" or "aws platform" is not
+// one. Unmapped names fall back to the de-slugged fragment, and an unfamiliar
+// shape returns "" so the caller can drop the role clause rather than invent it.
+const TRADE_BY_ROLE: Readonly<Record<string, string>> = {
+  product: "product manager",
+  "product lead": "product lead",
+  design: "designer",
+  delivery: "delivery lead",
+  architect: "architect",
+  "architecture reviewer": "architecture reviewer",
+  "aws platform": "platform engineer",
+  compliance: "compliance specialist",
+  devsecops: "security engineer",
+  developer: "developer",
+  quality: "quality engineer",
+  "pipeline deploy": "release engineer",
+  operations: "operations engineer",
+};
+
 function roleInWords(agent: string): string {
   const match = /^aidlc-(.+)-agent$/.exec(agent.trim());
   if (!match) return "";
-  return match[1].replaceAll("-", " ");
+  const fragment = match[1].replaceAll("-", " ");
+  return TRADE_BY_ROLE[fragment] ?? fragment;
 }
 
 // --- Terminal-directive constructors (the non-run-stage kinds) ---
