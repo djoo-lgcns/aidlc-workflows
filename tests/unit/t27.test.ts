@@ -573,7 +573,7 @@ describe("t27 aidlc-utility init", () => {
     const r = util(["intent-create", "--scope", "poc"], p);
     // P4: init is a back-compat alias for intent-create; the stdout now reports the
     // born intent + state init, not the old "Workspace scaffolded" scaffold line.
-    expect(r.stdout).toContain("Intent born:");
+    expect(r.stdout).toContain("Intent created:");
     expect(r.stdout).toContain("State initialized:");
   });
 

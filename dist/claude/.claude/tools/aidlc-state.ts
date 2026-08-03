@@ -572,9 +572,9 @@ export function main(argv: string[]): void {
     process.env.AIDLC_ALLOW_DIRECT_STATE_TRANSITIONS !== "1"
   ) {
     error(
-      `Direct aidlc-state.ts ${subcommand} is blocked: only the workflow engine may change a ` +
-        "stage's status, so that the state file, the audit log, and the compiled stage graph " +
-        "stay in agreement. Use aidlc-orchestrate.ts report --stage <slug> --result " +
+      `Direct aidlc-state.ts ${subcommand} is blocked: stage status is changed by the ` +
+        "workflow tools, not by hand, so that the state file, the audit log, and the compiled " +
+        "stage graph stay in agreement. Use aidlc-orchestrate.ts report --stage <slug> --result " +
         "<awaiting-approval|approved|rejected|revised|completed|skipped>; use " +
         "aidlc-orchestrate.ts park to pause the workflow, and next/jump to change routing.",
     );

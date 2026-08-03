@@ -171,9 +171,9 @@ async function main(): Promise<void> {
   if (verb === null) return;
 
   process.stderr.write(
-    `[aidlc] Direct aidlc-state.ts ${verb} is blocked: only the workflow engine may change a stage's ` +
-      "status, so that the state file, the audit log, and the compiled stage graph stay in " +
-      "agreement. Use aidlc-orchestrate.ts report --stage <slug> --result " +
+    `[aidlc] Direct aidlc-state.ts ${verb} is blocked: stage status is changed by the workflow ` +
+      "tools, not by hand, so that the state file, the audit log, and the compiled stage graph " +
+      "stay in agreement. Use aidlc-orchestrate.ts report --stage <slug> --result " +
       "<awaiting-approval|approved|rejected|revised|completed|skipped>; use " +
       "aidlc-orchestrate.ts park to pause the workflow, and next/jump to change routing.\n",
   );

@@ -128,7 +128,7 @@ const DRIVE_TIMEOUT_MS = Math.max(120_000, TEST_TIMEOUT_MS - 15_000);
 // the deterministic tool fired, not the LLM's prose. (The old "(team knowledge —
 // 11 agent dirs + aidlc-shared)" scaffold-tree line was a --init artifact and is
 // GONE; birth prints the intent-born + state-init block instead.)
-const BIRTH_INTENT_LINE = "Intent born:"; // utility.ts:2375
+const BIRTH_INTENT_LINE = "Intent created:"; // utility.ts:2375
 const INIT_STATE_SUMMARY = "State initialized:"; // utility.ts:2376
 const STOP_AFTER_INIT = { toolName: "Bash", resultIncludes: INIT_STATE_SUMMARY } as const;
 // The 3 initialization-phase stages — always [x] in the freshly written state

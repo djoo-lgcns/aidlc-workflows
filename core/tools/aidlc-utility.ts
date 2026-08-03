@@ -2329,7 +2329,7 @@ function handleDoctor(projectDir: string, flags: Record<string, string> = {}): v
       pass: true,
       label: orphans === 0
         ? `MERGE_DISPATCH: 0 orphan INVOKED (${invokedRows.length} bracketed)`
-        : `MERGE_DISPATCH: ${orphans} orphan INVOKED (advisory — LLM dispatch unmatched after ${MERGE_DISPATCH_TIMEOUT_SEC}s)`,
+        : `MERGE_DISPATCH: ${orphans} orphan INVOKED (advisory - a merge started but no matching finish was recorded within ${MERGE_DISPATCH_TIMEOUT_SEC}s)`,
     });
   } catch {
     // MERGE_DISPATCH check failure is non-fatal for doctor report
@@ -3960,7 +3960,7 @@ ${stageProgress}
       ? `Warning: ${uninitSubmodules.length} uninitialized git submodule path(s) (${enumerateSubmodulePaths(uninitSubmodules)}) - run '${SUBMODULE_INIT_REMEDY}' before proceeding so reverse-engineering can read the code.\n`
       : "";
   process.stdout.write(
-    `Intent born: ${bornDir} (space: ${activeSpace(projectDir)})
+    `Intent created: ${bornDir} (space: ${activeSpace(projectDir)})
 State initialized: ${scope} scope, ${totalInScope} stages, ${effectiveDepth} depth
 Project type: ${scan.projectType}
 Languages: ${scan.languages}
@@ -4911,7 +4911,7 @@ function handleSetStatus(projectDir: string, flags: Record<string, string>): voi
     process.env.AIDLC_STATUSLINE_OWNER !== `statusline:${process.ppid}`
   ) {
     die(
-      "Direct aidlc-utility set-status is blocked: status synchronization is owned by the sync-workflow-state hook.",
+      "Direct aidlc-utility set-status is blocked: status synchronization is owned by the sync-workflow-state hook. You do not need to run this - the status updates by itself when a stage starts and when you report an outcome. Run /aidlc --status to see where the workflow is.",
     );
   }
   const sp = stateFilePath(projectDir, flags.intent, flags.space);
@@ -5465,8 +5465,21 @@ export async function main(argv: string[]): Promise<void> {
       handleStageTable(projectDir, flags, rawArgs);
       break;
     default:
+      // `intent-birth` was renamed to `intent-create`; point the old name at
+      // the new one rather than burying it in the verb list.
+      if (subcommand === "intent-birth") {
+        die(
+          "`intent-birth` was renamed to `intent-create`. Run the same command with " +
+            "`intent-create` instead (flags are unchanged)."
+        );
+      }
       die(
-        `Usage: aidlc-utility <help|version|status|doctor|intent-create|intent|space|space-create|codekb-path|detect|select-plugins|plugin-list|plugin-sync|recompose|scope-change|config-change|config-get|config-list|set-status|detect-scope|resolve-env-scope|scope-table|stage-table|upgrade> [--project-dir <path>] [--scope <scope>] [--json]`
+        `Unknown command "${subcommand}". Run \`aidlc-utility help\` for what this tool can do.\n\n` +
+          "Available commands: help, version, status, doctor, intent-create, intent, space, " +
+          "space-create, codekb-path, detect, select-plugins, plugin-list, plugin-sync, " +
+          "recompose, scope-change, config-change, config-get, config-list, set-status, " +
+          "detect-scope, resolve-env-scope, scope-table, stage-table, upgrade\n" +
+          "Common options: [--project-dir <path>] [--scope <scope>] [--json]"
       );
   }
 }
