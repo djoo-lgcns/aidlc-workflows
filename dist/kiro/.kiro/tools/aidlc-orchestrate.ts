@@ -196,13 +196,22 @@ function emit(directive: Directive): void {
     directive.kind === "run-stage" && runStageRoutes.has(directive)
       ? transportRunStage(directive, runStageRoutes.get(directive)!)
       : directive;
-  // A per-unit Construction beat says nothing: `unit` is present on every
-  // iteration of the same stage (callers attach it after the run-stage is
-  // built), and one spoken sentence per unit would be noise. The settle
-  // directive that closes the stage carries no unit, so the stage still gets
-  // exactly one spoken entry. Silence is a valid narration.
+  // Per-unit Construction beats: `unit` is attached by callers after the
+  // run-stage is built, so the builder's stage-entry line is wrong here (the
+  // stage was entered on the first unit, not on this one). Every path that sets
+  // `unit` funnels through here - stage-major, unit-major, the swarm settle, and
+  // the continue-token rehydration - so this is the one place the rule can hold.
+  //
+  // Silence was the original answer and it did not survive contact: a moment
+  // with no words is a moment the conductor fills, and what it reaches for is
+  // the loop's own bookkeeping (which pass this is, what the gate boolean now
+  // says). So a building beat gets ONE short line naming the two things that are
+  // real to the user: the stage and the unit. The settle beat stays silent
+  // because the gate ritual immediately owns that turn.
   if (transported.kind === "run-stage" && transported.unit !== undefined) {
-    delete transported.narration;
+    const line = narratePerUnitBeat(transported);
+    if (line === null) delete transported.narration;
+    else transported.narration = line;
   }
   const result = validateDirective(transported);
   if (!result.valid) {
@@ -339,6 +348,18 @@ function narrateStageEntry(
       `and I will stop for your review before anything is final.`
     );
   }
+  // Entering the build phase names a piece of vocabulary the user is about to
+  // see in their own artifacts (bolt-plan.md, and every later beat of this
+  // phase), so the line that introduces it defines it in the same breath. The
+  // definition is delivery-planning's own, said the way a colleague would say
+  // it. Said once, on the phase boundary; later Construction stages get the
+  // ordinary per-stage line.
+  if (isFirstConstructionStage(node, scope)) {
+    return (
+      `Starting the first Bolt now: one build pass over the code, tests and ` +
+      `checks for a piece of the work. First step is ${stageName}.`
+    );
+  }
   // A non-gating stage runs straight through, so the line says so rather than
   // leaving the user waiting for a prompt that is not coming.
   if (gate === false) {
@@ -375,6 +396,36 @@ function narrateSpecialistStage(node: GraphStage): string {
   return role
     ? `Bringing in the ${role} to work on ${node.name}.`
     : `Now working on ${node.name}.`;
+}
+
+// The spoken line for ONE iteration of a per-unit Construction stage. Called
+// from emit(), the single choke point every unit-carrying directive passes
+// through, and deliberately the SHORTEST line in this file: the user is watching
+// the same stage name go past once per piece of work, so anything longer reads
+// as repetition. Two facts, both theirs: the stage, and which piece of their
+// work it is running for.
+//
+// null = say nothing. That is the settle beat (gate not false), where the stage
+// is fully built and the very next thing the conductor does is present the gate
+// ritual, which owns its own words. A line here would preface that with a
+// re-announcement of a stage the user has already watched run.
+//
+// The placeholder unit (a scope with no unit DAG) is not a real name, so it
+// falls back to the stage alone rather than saying the token out loud.
+function narratePerUnitBeat(directive: RunStageDirective): string | null {
+  if (directive.gate !== false) return null;
+  const unit = directive.unit;
+  if (unit === undefined || unit === UNIT_NAME_PLACEHOLDER) return null;
+  const stageName = nodeForSlug(directive.stage)?.name ?? directive.stage;
+  return `Now working on ${unit}: the ${stageName} pass.`;
+}
+
+// True when `node` is the FIRST in-scope Construction stage, i.e. the stage the
+// workflow crosses the Construction boundary on. Reuses the same resolution the
+// walking-skeleton gate uses (isSkeletonGateStage), so "the first Bolt" means
+// the same stage to the spoken line as it does to the gate.
+function isFirstConstructionStage(node: GraphStage, scope: string): boolean {
+  return isSkeletonGateStage(node, scope);
 }
 
 // Turn an agent filename into the TRADE a person would say out loud:
