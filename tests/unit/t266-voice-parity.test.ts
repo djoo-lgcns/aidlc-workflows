@@ -145,16 +145,25 @@ describe("t266 §3 retired framework-voice phrases stay out of user-visible pros
   function scannedFiles(): string[] {
     return [
       "core/templates/onboarding.md",
+      // The per-stage diary template. Its first line renders inside the Write
+      // diff of EVERY stage, which makes it one of the most-seen strings the
+      // framework ships; it read "maintained by the orchestrator" until the
+      // Construction voice pass. t100 pins its exact new wording, this pins that
+      // the retired vocabulary cannot come back.
+      "core/knowledge/aidlc-shared/memory-template.md",
       ...HARNESS_MATRIX.map((h) => `harness/${h.name}/onboarding.fills.ts`),
     ].sort();
   }
 
   // Each phrase is a framework-voice tell the voice layer replaced. They are
   // matched case-insensitively so a capitalised reintroduction cannot slip by.
+  // "orchestrator" is scanned as a WORD (not a substring) so "orchestration"
+  // elsewhere is not double-counted by the phrase entry above it.
   const DENIED = [
     "orchestration engine",
     "auto-birth",
     "flag-precedence ladder",
+    "maintained by the orchestrator",
   ] as const;
 
   for (const rel of scannedFiles()) {
@@ -215,5 +224,112 @@ describe("t266 §3 retired framework-voice phrases stay out of user-visible pros
     };
     walk(stagesRoot);
     expect(offenders).toEqual([]);
+  });
+});
+
+// =========================================================================
+// §4 — The Construction-phase voice obligations.
+//
+// A live end-to-end run held the contract through Ideation and Inception and
+// then regressed fourfold inside Construction: the per-unit loop had narration
+// moments no authored line covered, so the model filled them with the only
+// material in front of it (which pass of the iteration this was, what the gate
+// boolean now said, what a produces list resolved to). Three surfaces close
+// that, and each is a DELETION risk rather than a drift risk - remove any one
+// and the framework keeps working while quietly going back to narrating its own
+// loop. So each gets a presence pin.
+// =========================================================================
+describe("t266 §4 Construction keeps its own voice rules", () => {
+  test("the protocol's voice contract covers the per-unit loop's bookkeeping", () => {
+    const flat = read(PROTOCOL_REL).replace(/\s+/g, " ");
+    expect(flat).toContain("In Construction, the loop's bookkeeping is internal.");
+    // The substance, not just the heading: the rule's whole force is that a
+    // PLAIN retelling is not an improvement (that is the move the live run
+    // showed the model making), and that a re-entry's own narration value is
+    // what gets said instead.
+    expect(flat).toContain("A plain-language retelling is not an improvement");
+    expect(flat).toContain("`narration` value already says exactly that");
+  });
+
+  test("every conductor SKILL carries the Construction quiet rule, worded identically", () => {
+    // Byte-alignment across the matrix for the same reason t181 pins the
+    // narration block that way: authored once, copied five times, so a
+    // per-harness reword is drift rather than intent.
+    const MARKER = "**Inside Construction.**";
+    const paragraphs = new Map<string, string[]>();
+    for (const { name, rel } of authoredSkills()) {
+      const body = read(rel);
+      const start = body.indexOf(MARKER);
+      expect(start, `${name} lacks the Construction quiet rule`).toBeGreaterThan(-1);
+      const paragraph = body.slice(start).split("\n\n")[0];
+      const seen = paragraphs.get(paragraph) ?? [];
+      seen.push(name);
+      paragraphs.set(paragraph, seen);
+    }
+    expect([...paragraphs.values()].map((v) => v.sort())).toHaveLength(1);
+  });
+
+  test("the load-steering row forbids a substitute progress sentence", () => {
+    // The run showed the same substitution six times ("Continuing to the stage
+    // directive"): the row already banned a progress message, so the model wrote
+    // its own sentence in that slot instead. Every harness must carry the
+    // strengthened clause.
+    const missing: string[] = [];
+    for (const { name, rel } of authoredSkills()) {
+      if (!read(rel).includes(
+        "do not put a sentence of your own where the progress message would have gone",
+      )) {
+        missing.push(name);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  test("the engine authors a line for a building per-unit beat and none for the settle beat", () => {
+    // The narration constructors are not exported (the tools have zero exports),
+    // so this pins the two structural facts at the source: the gate test that
+    // separates a building beat from the settle beat, and the placeholder guard
+    // that keeps "{unit-name}" from ever being spoken. t-drive coverage of the
+    // emitted values lives with the live probe; this is the cheap regression net.
+    const engine = read("core/tools/aidlc-orchestrate.ts");
+    expect(engine).toContain("function narratePerUnitBeat");
+    expect(engine).toContain("if (directive.gate !== false) return null;");
+    expect(engine).toContain("unit === UNIT_NAME_PLACEHOLDER");
+  });
+
+  test("delivery-planning and practices-discovery require a first-mention gloss", () => {
+    const delivery = read(
+      "core/aidlc-common/stages/inception/delivery-planning.md",
+    ).replace(/\s+/g, " ");
+    // The Bolt definition existed already but sat in a block addressed to the
+    // model, so it never rendered. What is pinned is the INSTRUCTION that its
+    // first user-facing mention carries it.
+    expect(delivery).toContain("These definitions are for YOU");
+    expect(delivery).toContain("first user-facing mention");
+    // Artifacts are user-read documents and get the same bar, per file.
+    expect(delivery).toContain("each file stands alone");
+
+    const practices = read(
+      "core/aidlc-common/stages/inception/practices-discovery.md",
+    ).replace(/\s+/g, " ");
+    expect(practices).toContain("Gloss a term of art the first time it appears");
+    // The walking-skeleton question text itself, glossed in the question line
+    // rather than inside one option.
+    expect(practices).toContain("A walking skeleton is a minimal version");
+  });
+
+  test("the walking-skeleton question drops the framework's own stance vocabulary", () => {
+    // "skeleton ceremony" is LOAD-BEARING in memory/org.md: the conductor's
+    // stance classifier matches on that prose (core/aidlc-common/conductor.md),
+    // so it is machine-facing by contract and stays. What must not carry it is
+    // the QUESTION built from that section.
+    const practices = read(
+      "core/aidlc-common/stages/inception/practices-discovery.md",
+    ).toLowerCase();
+    expect(practices).not.toContain("ceremony");
+    // The classifier's side of the contract is still intact, so the carve-out
+    // above is a real distinction rather than a phrase that vanished everywhere.
+    expect(read("core/memory/org.md")).toContain("skeleton ceremony");
+    expect(read("core/aidlc-common/conductor.md")).toContain("skeleton ceremony");
   });
 });
