@@ -65,6 +65,8 @@ const HOOKS = [
   "aidlc-state-transition-guard.ts",
   // Enforces the per-unit reviewer read-scope bound on PreToolUse.
   "aidlc-reviewer-scope.ts",
+  // Enforces code-generation's plan-before-generation ordering on PreToolUse.
+  "aidlc-plan-approval-guard.ts",
 ] as const;
 
 describe("t02 hook presence — shipped dist/claude/.claude/hooks (migrated from t02-hook-executability.sh, plan 10)", () => {

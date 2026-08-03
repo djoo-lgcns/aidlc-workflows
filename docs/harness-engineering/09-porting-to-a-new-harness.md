@@ -92,9 +92,9 @@ Wire the adapter to the harness's events the harness's own way: Kiro registers
 targets in `agents/aidlc.json`; Codex emits `hooks.json`. Register only events
 with a real core-hook consumer.
 
-Three hooks are flow-altering and need their block channels forwarded, not just
+Four hooks are flow-altering and need their block channels forwarded, not just
 piped: the Stop hook answers with `{"decision":"block"}` on stdout, while the
-PreToolUse reviewer-scope and state-transition guards answer with exit 2 + a
+PreToolUse reviewer-scope, plan-approval, and state-transition guards answer with exit 2 + a
 reason on stderr (the tool call must be refused when the adapter relays that exit code). If the new
 harness cannot hard-block a tool call from its pre-tool seam, leave the
 reviewer-scope registration out and document the gap rather than wiring a dead

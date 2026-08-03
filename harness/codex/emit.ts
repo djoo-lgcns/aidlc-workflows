@@ -39,6 +39,9 @@ const HOOK_WIRING: Array<{ event: string; matcher?: string; target: string }> = 
   // tool anyway. Verified on 0.142.5: subagent tool calls carry agent_type,
   // and a PreToolUse exit 2 + stderr blocks the call with the reason relayed.
   { event: "PreToolUse", target: "reviewer-scope" },
+  // No matcher: the plan-approval-guard target self-filters (spawn_agent
+  // naming the developer agent; everything else exits 0 instantly).
+  { event: "PreToolUse", target: "plan-approval-guard" },
   { event: "PostToolUse", matcher: "apply_patch", target: "audit-and-sensors" },
   { event: "PostToolUse", matcher: "update_plan", target: "state-sync" },
   { event: "PostToolUse", matcher: "Bash", target: "runtime-compile" },

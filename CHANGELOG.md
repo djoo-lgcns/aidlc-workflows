@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.38] - 2026-08-04
+
+Code Generation's plan-before-generation ordering is now enforced deterministically. A field report showed the conductor generating code first and backfilling `code-generation-plan.md` beside `code-summary.md`, turning the plan into a retroactive summary; the new plan-approval PreToolUse guard refuses the developer-agent dispatch until the target unit's plan is on disk and the human has answered "Approve Plan". **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the new hook and its registrations are installed.
+
+* New framework hook `aidlc-plan-approval-guard.ts` (the 15th): while Current Stage is code-generation, a Task/subagent dispatch targeting `aidlc-developer-agent` is refused with a redirecting reason unless its explicit `AIDLC-UNIT: <unit>` marker identifies one known unit with a non-empty `code-generation-plan.md` on disk and a Plan Approval question recording the explicit "Approve Plan" response. Missing, conflicting, and unknown markers block; contextual references to sibling units do not affect the target. Numbered headings such as `Q1: Plan Approval` and `Question 1 - Plan Approval` are accepted, while blank tags, "Request Changes", and unrelated answered questions keep blocking.
+* Each refusal emits a `PLAN_APPROVAL_BLOCKED` audit event (the 75th event type) naming the tool, target agent, and marked unit.
+* Wired on Claude Code (settings.json `Task` matcher), Kiro CLI (conductor agent `subagent` matcher via the adapter), Codex (hooks.json PreToolUse target), and opencode (plugin `tool.execute.before` on `task`). Kiro IDE documents the bound as prose-only, matching its other guards.
+* Carve-outs: autonomous Construction swarms are exempt (the autonomy grant is the standing approval and the swarm referee owns per-unit verification); `AIDLC_DISABLE_PLAN_APPROVAL_GUARD=1` disables enforcement entirely. The guard fails open outside its guarded dispatch (no state file, another stage, another agent, malformed payloads), while ambiguous target markers fail closed.
+
 ## [2.5.37] - 2026-08-03
 
 The orchestrator must never echo a fenced ` ```question ` block as literal chat text: the fence is an authoring spec rendered through each harness's question mechanism, never printed verbatim. Dumping the raw fence yields a non-interactive wall of text and drops the answerable options and "Other" escape supplied by the harness's native tool or numbered-prose fallback. This tightens the harness-neutral stage protocol and every per-harness question-rendering annex (Claude, Codex, Kiro CLI, Kiro IDE, opencode). Literal fences remain in framework documentation, but the stage protocol's fences are normative prompt specs whose contents must still be rendered when their surrounding instructions require them; only raw fence syntax is excluded from live chat. **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the updated protocol and question-rendering annex are installed. Behavior is a documentation and contract change only; no command, flag, or state format changes.

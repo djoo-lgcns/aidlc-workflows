@@ -71,6 +71,10 @@ const VALID_EVENT_TYPES = new Set([
   // Reviewer read-scope enforcement (hook-emitted): a per-unit reviewer's
   // tool call was refused for reaching into sibling units' construction/ paths.
   "REVIEWER_SCOPE_BLOCKED",
+  // Plan-approval ordering enforcement (hook-emitted): a code-generation
+  // developer-agent dispatch was refused because no unit had an approved
+  // code-generation plan on disk (stage Steps 2-3 must precede Step 4).
+  "PLAN_APPROVAL_BLOCKED",
   // Health/system
   "HEALTH_CHECKED",
   "SCOPE_DETECTED",
@@ -171,6 +175,7 @@ const EVENT_HEADINGS: Record<string, string> = {
   ARTIFACT_REUSED: "Artifact Reused",
   SUBAGENT_COMPLETED: "Subagent Completed",
   REVIEWER_SCOPE_BLOCKED: "Reviewer Scope Blocked",
+  PLAN_APPROVAL_BLOCKED: "Plan Approval Blocked",
   HEALTH_CHECKED: "Health Check",
   SCOPE_DETECTED: "Scope Detection",
   SCOPE_CHANGED: "Scope Change",

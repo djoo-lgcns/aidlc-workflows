@@ -20,22 +20,22 @@
     "render-surface": "tui"
   },
   "counts": {
-    "total": 487,
+    "total": 489,
     "enumeratedByClass": {
       "function": 253,
-      "audit": 74,
+      "audit": 75,
       "scope": 9,
       "stage": 32,
-      "hook": 14,
+      "hook": 15,
       "subcommand": 98,
       "render-surface": 7
     },
     "coveredByClass": {
       "function": 107,
-      "audit": 33,
+      "audit": 34,
       "scope": 9,
       "stage": 9,
-      "hook": 14,
+      "hook": 15,
       "subcommand": 85,
       "render-surface": 7
     }
@@ -264,6 +264,18 @@
       "coveredBy": [
         {
           "file": "tests/e2e/t113.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "audit",
+      "unitId": "PLAN_APPROVAL_BLOCKED",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/unit/t263-plan-approval-guard.test.ts",
           "mechanism": "cli"
         }
       ],
@@ -3381,6 +3393,30 @@
       "coveredBy": [
         {
           "file": "tests/unit/t228-hook-run-exports.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "hook",
+      "unitId": "aidlc-plan-approval-guard",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/unit/t147-kiro-hook-adapter.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/unit/t149-codex-hook-adapter.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/unit/t228-hook-run-exports.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/unit/t263-plan-approval-guard.test.ts",
           "mechanism": "cli"
         }
       ],
