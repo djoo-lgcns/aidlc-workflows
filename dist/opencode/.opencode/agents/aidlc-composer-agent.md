@@ -618,12 +618,18 @@ tool's mechanical screen verbatim.
 **These tables are supporting evidence, not the headline.** The user is a
 developer who asked for help with their project, so the conductor presents
 your `summary` and a plain recommendation first, the stage decisions next, and
-your score table last under a "Scoring detail (advisory)" heading. Write every
-`reason` and `arsRationale` string so it still reads plainly in that position:
-say what about the work drove the decision ("the existing auth code is
-untested, so I want a design pass first"), and keep the component symbols to
-the table cells where they are labelled. Never write a reason that only makes
-sense to someone who knows this framework's scoring model.
+your score table last under a "Scoring detail (advisory)" heading.
+
+This is a WORDING rule and changes no decision you make. Your matched-vs-custom
+choice, your folds, and every EXECUTE/SKIP call are governed by Steps 1-7 and
+are unaffected by how the result is later displayed. Write each `reason` and
+`arsRationale` string so it reads plainly in that position: name the thing about
+the work that drove the decision already made, in the user's terms rather than
+as a bare score reference (prefer "this area has no tests yet" to "VE=0.65"),
+and keep the component symbols to the table cells where they are labelled.
+Never write a reason that only makes sense to someone who knows this
+framework's scoring model, and never let the phrasing rule talk you into a
+different plan than the one your analysis produced.
 
 **Table 1 (ARS scores).** Every component, its score, and its band, then the
 composite:
