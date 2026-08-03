@@ -21,7 +21,7 @@
 //       still succeeds, because writers create their own parent chain. This is
 //       the disproof case for "trimming the dir breaks a late write".
 //
-// MECHANISM. SPAWNs the real shipped engine CLI (`aidlc-utility.ts intent-birth`)
+// MECHANISM. SPAWNs the real shipped engine CLI (`aidlc-utility.ts intent-create`)
 // against temp project dirs, so the actual creation path runs end to end and the
 // assertions read disk truth. Zero tokens, zero network.
 
@@ -61,7 +61,7 @@ function mkTemp(tag: string): string {
 function create(projectDir: string, scope: string): ReturnType<typeof spawnSync> {
   return spawnSync(
     BUN,
-    [UTILITY, "intent-birth", "--scope", scope, "--arguments", "t265 probe", "--project-dir", projectDir],
+    [UTILITY, "intent-create", "--scope", scope, "--arguments", "t265 probe", "--project-dir", projectDir],
     { encoding: "utf-8" },
   );
 }
@@ -70,7 +70,7 @@ function create(projectDir: string, scope: string): ReturnType<typeof spawnSync>
  *  non-zero exit (a silent failure would make every absence assertion vacuous). */
 function createAndResolveRecord(projectDir: string, scope: string): string {
   const res = create(projectDir, scope);
-  expect(res.status, `intent-birth ${scope} failed: ${res.stdout}\n${res.stderr}`).toBe(0);
+  expect(res.status, `intent-create ${scope} failed: ${res.stdout}\n${res.stderr}`).toBe(0);
   const intentsDir = join(projectDir, INTENTS_REL);
   const records = readdirSync(intentsDir).filter((e) =>
     statSync(join(intentsDir, e)).isDirectory(),
@@ -172,7 +172,7 @@ describe("t265 scope-aware phase dirs at intent creation", () => {
     writeFileSync(sentinel, "legacy artifact\n", "utf-8");
 
     const res = create(proj, "bugfix");
-    expect(res.status, `intent-birth failed: ${res.stdout}\n${res.stderr}`).toBe(0);
+    expect(res.status, `intent-create failed: ${res.stdout}\n${res.stderr}`).toBe(0);
 
     expect(phaseDirsPresent(legacy).sort()).toEqual([...PHASES].sort());
     expect(readFileSync(sentinel, "utf-8")).toBe("legacy artifact\n");
