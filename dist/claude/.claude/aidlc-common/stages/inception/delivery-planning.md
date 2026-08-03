@@ -81,6 +81,18 @@ This stage plans the Bolt sequence — the order in which Units of Work are exec
 
 **Definitions for this stage:**
 - **Bolt** — per `stage-protocol.md` Glossary: "a deployable unit of work within Construction — one pass through stages 3.1–3.7." A Bolt wraps one or more Units of Work and runs once through the Construction stages.
+
+These definitions are for YOU. They are not written to be read out, and the user
+has not seen them. Every one of them names something that is about to appear in
+the questions you ask and the artifacts you write, so the first time a term
+reaches the user it carries its own one-clause definition, in the sentence that
+uses it rather than as a separate glossary. "Bolt" is the one that matters most,
+because it is the vocabulary of the whole next phase: its first user-facing
+mention reads as a Bolt plus what a Bolt is (one build pass over a piece of the
+work, ending in something that runs), and later mentions read as just "Bolt".
+Same treatment for a scoring model you propose by name and for the walking
+skeleton. A term whose definition would not survive being compressed to a clause
+is a term to replace with plain words instead.
 - **Confidence hypothesis** — the observable behaviour that shipping the Bolt validates or falsifies (e.g., "latency stays under 200ms under 1k-rps load," "users complete signup without support tickets," "the event pipeline survives a 10x burst").
 - **WSJF** (Reinertsen / SAFe) — Weighted Shortest Job First. Sequence score = (user-business value + time criticality + risk-reduction value) ÷ job size. Higher score ships first.
 - **Walking skeleton** (Cockburn) — the first Bolt is a minimal end-to-end slice touching every architectural layer that proves the architecture works; features come in later Bolts.
@@ -114,7 +126,14 @@ Validate the chosen Bolt sequence respects 2.7's dependency DAG (with aidlc-arch
 
 ### Step 5: Generate Artifacts
 
-Create four artifacts in `<record>/inception/delivery-planning/`:
+Create four artifacts in `<record>/inception/delivery-planning/`. These are
+documents the user opens and reads at the gate, so the same rule the questions
+follow applies to the prose inside them: a term of art carries a one-clause
+definition at its first appearance in that file, and each file stands alone (the
+reader may open `team-allocation.md` without having read `bolt-plan.md`). "Bolt",
+"mob", "walking skeleton", "Program Board", and any scoring model named by
+initials all qualify. Gloss and move on; do not restructure the artifact around
+the explanation.
 
 - `bolt-plan.md` — the ordered sequence of Bolts. Each Bolt entry: included Unit(s) of Work, walking-skeleton marker if applicable, Definition of Done for that Bolt, confidence hypothesis ("what will shipping this Bolt prove?"), expected demo.
 - `team-allocation.md` — Bolt-to-mob assignment. References teams from 1.5 when 1.5 ran (enterprise, feature). When 1.5 is SKIP (mvp, workshop), states that all Bolts are executed by aidlc-developer-agent (AI). When team count > 1, this is the Program Board analog.

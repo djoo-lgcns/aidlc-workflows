@@ -136,6 +136,24 @@ Working, Walking Skeleton, Testing Posture, Deployment, and Code Style.
   sections as suggested answers.
 - **Re-run:** show the matching `memory/team.md` content as the default.
 
+The `memory/*.md` sections you draw the suggested answers from are written for
+this framework's own resolution rules, so they carry vocabulary the person
+answering has no reason to know. Two obligations follow, and they apply to the
+question text as much as to the options:
+
+- **Ask in their words, not the section's.** A section's phrasing is an input to
+  your question, never the question itself. "Walking Skeleton" is the name of a
+  practice; "Should we build a thin end-to-end slice first?" is a question
+  someone can answer. Drop the framework's process nouns from what you present.
+- **Gloss a term of art the first time it appears, in the question itself.** A
+  practice with a name the user may not share gets a single clause defining it,
+  in the question line rather than tucked inside one option, so the definition is
+  read before the choice is made. For the Walking Skeleton area, ask it as
+  **"Build a thin end-to-end slice first? A walking skeleton is a minimal
+  version that runs the whole way through, built first to prove the pieces
+  connect before the real features go in."** and offer the yes/no choice
+  beneath it. Later mentions need no gloss.
+
 Log every interview question with `aidlc-log.ts decision` before presenting it
 and every interview answer with `aidlc-log.ts answer` after the response,
 following the standard non-gate question flow.
