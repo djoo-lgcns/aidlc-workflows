@@ -56,7 +56,7 @@ Read `<record>/aidlc-state.md` to confirm:
 
 If the project is not brownfield, run
 `bun .kiro/tools/aidlc-orchestrate.ts report --stage reverse-engineering --result skipped --reason "<reason>"`.
-The engine records the skip and advances to the next in-scope stage.
+That records the skip and advances to the next in-scope stage.
 
 #### Resolve the intent's repo set (multi-repo)
 
@@ -120,14 +120,14 @@ Architect synthesizes scan results into 9 artifacts:
 8. **code-quality-assessment.md** — Test coverage, linting, CI/CD, documentation quality, tech debt
 9. **reverse-engineering-timestamp.md** — Records when reverse engineering was performed (date, commit hash if available, scope of analysis). This is the freshness/staleness marker for the per-repo codekb store — a stale timestamp triggers a rerun (see the `condition` frontmatter: "Always rerun for freshness").
 
-**Resolve the write directory with the engine, do NOT compose the path yourself.**
+**Resolve the write directory with the tool, do NOT compose the path yourself.**
 Run the read-only tool
 
 ```
 bun .kiro/tools/aidlc-utility.ts codekb-path --repo <repo>
 ```
 
-(omit `--repo` for a single/unrecorded repo — the engine resolves the repo name).
+(omit `--repo` for a single/unrecorded repo - the tool resolves the repo name).
 It prints ONE line: the exact directory, e.g. `aidlc/spaces/<active-space>/codekb/<repo>/`.
 Write all 9 artifacts into the directory the tool printed — verbatim, creating it if
 absent. This is the durable per-repo code knowledge base, a space-level store shared

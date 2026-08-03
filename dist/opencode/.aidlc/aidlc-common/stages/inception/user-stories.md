@@ -69,7 +69,7 @@ Create `<record>/inception/user-stories/user-stories-assessment.md` documenting 
 
 If skipping, run
 `bun .aidlc/tools/aidlc-orchestrate.ts report --stage user-stories --result skipped --reason "<reason>"`.
-The engine records the skip and advances to the next in-scope stage.
+That records the skip and advances to the next in-scope stage.
 
 ### Step 3: Load Prior Context
 
@@ -147,7 +147,7 @@ goes to **round 2** — re-dispatch only the objecting agent(s) with the
 revised draft and the other participants' positions (they update their own
 contribution files). Maintained dissent is quoted verbatim in the Step 10
 completion summary. The three contribution files are this stage's ensemble
-evidence — the engine refuses approval while any is missing.
+evidence - approval is refused while any is missing.
 
 ### Step 9: Open the Approval Gate
 
@@ -158,7 +158,7 @@ bun .aidlc/tools/aidlc-orchestrate.ts report \
   --stage user-stories --result awaiting-approval
 ```
 
-If the engine refuses missing or malformed ensemble evidence, restore that
+If missing or malformed ensemble evidence is refused, restore that
 evidence before presenting the human gate.
 
 ### Step 10: Present Completion & Request Approval
@@ -171,8 +171,8 @@ Use stage-protocol.md completion template with completion emoji: :books:
 STOP for the human response. Report **Approve** with
 `--result approved --user-input "<exact choice>"`; report
 **Request Changes** with `--result rejected --user-input "<feedback>"`, run the
-revision loop, and report `--result revised` before re-presenting. The engine
-owns every lifecycle transition and advancement.
+revision loop, and report `--result revised` before re-presenting. That `report`
+call owns every lifecycle transition and advancement.
 
 ## Sensors
 

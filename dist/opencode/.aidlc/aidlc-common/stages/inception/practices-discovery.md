@@ -120,7 +120,7 @@ Each support agent writes:
 The first line must be `**Collaborator:** <agent-slug>`, followed by
 `## Contribution` and `## Positions` as defined by `stage-protocol.md` section
 11. Collect all three files before the interview. Their presence and identity
-markers are deterministic completion evidence checked by the engine.
+markers are deterministic completion evidence, checked before approval.
 
 ### Step 4: Interview (Always)
 
@@ -186,15 +186,15 @@ Run the section 13 learnings ritual, then:
 6. On Request Changes, report `--result rejected --user-input "<feedback>"`,
    revise through the lead (and re-run a support only when its evidence must be
    refreshed), then report `--result revised` before re-presenting the gate.
-   A rejection invalidates any earlier promotion receipt: the engine refuses
-   `approved` until Step 7's promotion re-runs after the rejection, so a later
+   A rejection invalidates any earlier promotion receipt: `approved` is refused
+   until Step 7's promotion re-runs after the rejection, so a later
    Approve must always re-promote the revised drafts.
 7. On Approve, do not report `approved` yet. Continue to Step 7 in the same
    response turn.
 
 ### Step 7: Promote (On Approve Only)
 
-The orchestrator does not edit active-space memory directly. Run:
+Never edit active-space memory directly. Run:
 
 ```bash
 bun .aidlc/tools/aidlc-state.ts practices-promote \
