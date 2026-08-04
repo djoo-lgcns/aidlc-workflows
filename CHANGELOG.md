@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.37] - 2026-08-04
+
+Restores the gitignored `aidlc/active-space` cursor after cloning a committed workspace. The cursor still defaults safely to `default` when absent, but SessionStart and active-intent writes now atomically materialize it without overwriting a concurrent explicit space switch. **Upgrade:** re-copy your `dist/<harness>/` shell so the updated library and SessionStart hook are installed; no repository migration or configuration change is required.
+
+* A fresh clone now recreates `aidlc/active-space` on SessionStart, even before an intent exists, so the shipped workspace model remains visible without committing per-user navigation state.
+* Intent birth, intent switching, and flat-layout migration recreate a missing space cursor through the same best-effort cursor primitive.
+* Cursor creation stages complete bytes and publishes them through an atomic no-replace link, so it cannot overwrite a concurrent `/aidlc space <name>` switch.
+
 ## [2.5.36] - 2026-08-03
 
 Adds an optional declared workspace manifest for multi-repo teams. AI-DLC already auto-discovers sibling code repos on disk at intent birth; this release lets a team also declare that expected set in a `repos.json` file at the workspace root and reconcile it with a new `aidlc-workspace-sync` tool that clones missing repos, maintains a managed `.gitignore` block, and generates a VSCode multi-root workspace. The manifest is a convenience layer only: disk discovery remains the runtime source of truth, so a repo works the moment it is cloned whether or not it is declared. `--doctor` gains three advisory rows about manifest state. **Upgrade:** re-copy your `dist/<harness>/` shell to pick up the new tool; without `repos.json`, sync stays dormant and doctor adds only the advisory workspace-records row.
