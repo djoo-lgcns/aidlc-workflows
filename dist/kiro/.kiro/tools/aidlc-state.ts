@@ -59,7 +59,10 @@ import {
   writeStateFile,
 } from "./aidlc-lib.js";
 import { memoryDirFor } from "./aidlc-graph.ts";
-import { stageUsageAuditFields } from "./aidlc-usage.ts";
+import {
+  stageUsageAuditFields,
+  workflowUsageAuditFields,
+} from "./aidlc-usage.ts";
 
 // All valid checkbox states (lib.ts adds [?] awaiting-approval and [R] revising)
 const VALID_CHECKBOX_STATES: CheckboxState[] = [
@@ -143,6 +146,14 @@ function emitAudit(
 function stageRollupFields(pd: string, stageSlug: string): Record<string, string> {
   try {
     return stageUsageAuditFields(pd, stageSlug);
+  } catch {
+    return {};
+  }
+}
+
+function workflowRollupFields(pd: string): Record<string, string> {
+  try {
+    return workflowUsageAuditFields(pd);
   } catch {
     return {};
   }
@@ -1815,11 +1826,8 @@ function handleCompleteWorkflow(args: string[]): void {
   }
 
   const pd = resolveProjectDir(projectDir);
-  // Per-stage token/cost rollup - computed BEFORE withAuditLock opens (ledger
-  // read only, try/caught) and merged into the completing stage's
-  // STAGE_COMPLETED and the WORKFLOW_COMPLETED event. The final stage's usage
-  // is the completing stage's rollup. {} when no ledger exists.
-  const usageFields = stageRollupFields(pd, completedSlug);
+  const stageUsageFields = stageRollupFields(pd, completedSlug);
+  const workflowUsageFields = workflowRollupFields(pd);
   // C2b lost-update safety: read→decide→emit-audit (4 rows)→write under one
   // lock so the 4 audit rows and the completion state commit atomically against
   // a single snapshot (audit-first / decide-inside-lock). emitAudit uses the
@@ -1888,7 +1896,7 @@ function handleCompleteWorkflow(args: string[]): void {
       emitAudit(pd, "STAGE_COMPLETED", {
         Stage: completedSlug,
         Details: `Final stage ${completedStage.name} completed`,
-        ...usageFields,
+        ...stageUsageFields,
       });
     }
     emitAudit(pd, "PHASE_COMPLETED", {
@@ -1902,7 +1910,7 @@ function handleCompleteWorkflow(args: string[]): void {
     const workflowFields: Record<string, string> = {
       Scope: scope,
       Details: `Scope: ${scope}, ${completedCount} stages completed`,
-      ...usageFields,
+      ...workflowUsageFields,
     };
     if (reason) workflowFields.Reason = reason;
     emitAudit(pd, "WORKFLOW_COMPLETED", workflowFields);
@@ -2341,6 +2349,7 @@ function handleSkip(args: string[]): void {
   const route = args.includes("--route");
 
   const pd = resolveProjectDir(projectDir);
+  const workflowUsageFields = workflowRollupFields(pd);
   // C2b lost-update safety: validate→transition→emit-audit→write under one lock.
   withAuditLock(pd, () => {
   let content = readStateFile(pd);
@@ -2517,6 +2526,7 @@ function handleSkip(args: string[]): void {
           Scope: scope,
           Details: `Scope: ${scope}, final stage ${slug} skipped`,
           Reason: reason,
+          ...workflowUsageFields,
         });
       }
     }

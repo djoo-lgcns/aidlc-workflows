@@ -35,7 +35,7 @@ This chapter covers common issues and their solutions, organized by symptom.
 
 ### `bun` not installed or not on PATH
 
-All 14 TypeScript hooks (`aidlc-mint-presence.ts`, `aidlc-dispatch-rules.ts`, `aidlc-state-transition-guard.ts`, `aidlc-reviewer-scope.ts`, `aidlc-audit-logger.ts`, `aidlc-sensor-fire.ts`, `aidlc-runtime-compile.ts`, `aidlc-log-subagent.ts`, `aidlc-stop.ts`, `aidlc-validate-state.ts`, `aidlc-sync-statusline.ts`, `aidlc-session-start.ts`, `aidlc-session-end.ts`, `aidlc-statusline.ts`) require `bun`. If `bun` is missing or not on PATH for non-interactive shells, these hooks will not fire.
+All 15 TypeScript hooks (`aidlc-mint-presence.ts`, `aidlc-dispatch-rules.ts`, `aidlc-state-transition-guard.ts`, `aidlc-reviewer-scope.ts`, `aidlc-audit-logger.ts`, `aidlc-sensor-fire.ts`, `aidlc-runtime-compile.ts`, `aidlc-fold-usage.ts`, `aidlc-log-subagent.ts`, `aidlc-stop.ts`, `aidlc-validate-state.ts`, `aidlc-sync-statusline.ts`, `aidlc-session-start.ts`, `aidlc-session-end.ts`, `aidlc-statusline.ts`) require `bun`. If `bun` is missing or not on PATH for non-interactive shells, these hooks will not fire.
 
 ```bash
 # macOS / Linux

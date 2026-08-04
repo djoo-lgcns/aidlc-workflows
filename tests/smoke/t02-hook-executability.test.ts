@@ -65,7 +65,7 @@ const HOOKS = [
   "aidlc-state-transition-guard.ts",
   // Enforces the per-unit reviewer read-scope bound on PreToolUse.
   "aidlc-reviewer-scope.ts",
-  // Folds transcript token usage into the durable ledger on PostToolUse.
+  // Folds transcript token usage into the durable ledger on PreToolUse + PostToolUse.
   "aidlc-fold-usage.ts",
 ] as const;
 
