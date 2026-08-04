@@ -32,6 +32,7 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
+  appendFileSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -138,6 +139,21 @@ function readAudit(dir: string): string {
     .join("\n");
 }
 
+function appendInteractionEvent(
+  dir: string,
+  event: "DECISION_RECORDED" | "QUESTION_ANSWERED" | "STAGE_STARTED",
+  stage: string,
+): void {
+  appendFileSync(
+    join(seededAuditDir(dir), pinnedShardName()),
+    `\n## ${event}\n` +
+      `**Timestamp**: ${new Date().toISOString()}\n` +
+      `**Event**: ${event}\n` +
+      `**Stage**: ${stage}\n\n---\n`,
+    "utf-8",
+  );
+}
+
 function withCwd(payload: Record<string, unknown>, dir: string): Record<string, unknown> {
   return { ...payload, cwd: dir };
 }
@@ -214,7 +230,32 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
     }
   });
 
-  test("2a: state-transition guard preserves exit 2 and stderr", () => {
+  test("2a: stop stays silent for an open logged question and blocks after its answer", () => {
+    const dir = scratchProject(true);
+    try {
+      appendInteractionEvent(dir, "STAGE_STARTED", "requirements-analysis");
+      appendInteractionEvent(dir, "DECISION_RECORDED", "requirements-analysis");
+
+      const waiting = runAdapter(dir, "stop", withCwd(FIXTURES.stop, dir));
+      expect(waiting.code).toBe(0);
+      expect(waiting.stdout.trim()).toBe("");
+
+      appendInteractionEvent(dir, "QUESTION_ANSWERED", "requirements-analysis");
+      const resolved = runAdapter(
+        dir,
+        "stop",
+        withCwd({ ...FIXTURES.stop, turn_id: "resolved-question-turn" }, dir),
+      );
+      expect(resolved.code).toBe(0);
+      expect(
+        (JSON.parse(resolved.stdout) as { decision?: string }).decision,
+      ).toBe("block");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("2b: state-transition guard preserves exit 2 and stderr", () => {
     const dir = scratchProject(false);
     try {
       const r = runAdapter(dir, "state-transition-guard", {
@@ -237,7 +278,7 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
     }
   });
 
-  test("2b: spawn_agent dispatch carries the exact active-stage rule bundle", () => {
+  test("2c: spawn_agent dispatch carries the exact active-stage rule bundle", () => {
     const dir = scratchProject(true);
     try {
       cpSync(
@@ -265,6 +306,27 @@ describe("t149 Codex hook adapter (live-captured payload fixtures)", () => {
       expect(message).toContain("first-class");
       expect(message).toContain("Given/When/Then");
       expect(message).toContain("AIDLC_DISPATCH_RULES_BEGIN");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("2d: state-transition guard blocks lifecycle routing from a Codex subagent", () => {
+    const dir = scratchProject(false);
+    try {
+      const r = runAdapter(dir, "state-transition-guard", {
+        hook_event_name: "PreToolUse",
+        cwd: dir,
+        tool_name: "Bash",
+        agent_type: "aidlc-product-lead-agent",
+        tool_input: {
+          command:
+            "bun .codex/tools/aidlc-orchestrate.ts next --resume",
+        },
+      });
+      expect(r.code).toBe(2);
+      expect(r.stdout).toBe("");
+      expect(r.stderr).toContain("workflow lifecycle and routing are conductor-owned");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -37,5 +37,13 @@
     "file://.kiro/knowledge/aidlc-shared/*.md",
     "file://aidlc/spaces/default/memory/**/*.md"
   ],
-  "hooks": {}
+  "hooks": {
+    "preToolUse": [
+      {
+        "matcher": "execute_bash",
+        "command": "bun .kiro/hooks/aidlc-kiro-adapter.ts state-transition-guard aidlc-delivery-agent",
+        "timeout_ms": 15000
+      }
+    ]
+  }
 }

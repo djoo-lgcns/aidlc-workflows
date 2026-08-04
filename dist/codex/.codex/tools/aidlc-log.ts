@@ -8,15 +8,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { appendAuditEntry, appendAuditEntryUnlocked } from "./aidlc-audit.ts";
 import {
-  auditBlockField,
   emitError,
   errorMessage,
+  hasPendingDecision,
   holdsAuditLock,
   humanActedSinceLastAnswer,
   humanPresenceGuardDisabled,
   isAutonomousMode,
   parseCheckboxes,
-  readAllAuditShards,
   resolveProjectDir,
   stateFilePath,
   withAuditLock,
@@ -126,56 +125,6 @@ function handleDecision(args: string[]): void {
 //
 // Fires AFTER the user answers a question.
 
-// An answer at an open approval gate belongs to a non-gate question only when
-// the audit stream proves that question was asked: a DECISION_RECORDED for this
-// stage after the current STAGE_AWAITING_APPROVAL, with no later
-// QUESTION_ANSWERED. This structural signal handles arbitrary user wording and
-// avoids guessing from gate-option words that may also begin substantive
-// answers. Caller holds the audit lock, so this snapshot cannot race an emit.
-function hasPendingDecisionAtGate(pd: string, stage: string): boolean {
-  const audit = readAllAuditShards(pd);
-  if (audit.length === 0) return false;
-
-  const relevant = new Set([
-    "STAGE_AWAITING_APPROVAL",
-    "DECISION_RECORDED",
-    "QUESTION_ANSWERED",
-  ]);
-  const events = audit
-    .replace(/\r\n/g, "\n")
-    .split(/\n---\n/)
-    .map((block, position) => ({
-      event: auditBlockField(block, "Event") ?? "",
-      stage: auditBlockField(block, "Stage"),
-      timestamp: auditBlockField(block, "Timestamp") ?? "",
-      position,
-    }))
-    .filter((event) => relevant.has(event.event))
-    .sort((a, b) => {
-      if (a.timestamp !== b.timestamp) {
-        return a.timestamp < b.timestamp ? -1 : 1;
-      }
-      return a.position - b.position;
-    });
-
-  const gateOpen = events.findLastIndex(
-    (event) =>
-      event.event === "STAGE_AWAITING_APPROVAL" && event.stage === stage,
-  );
-  if (gateOpen === -1) return false;
-
-  let pending = false;
-  for (const event of events.slice(gateOpen + 1)) {
-    if (event.stage !== stage) continue;
-    if (event.event === "DECISION_RECORDED") {
-      pending = true;
-    } else if (event.event === "QUESTION_ANSWERED") {
-      pending = false;
-    }
-  }
-  return pending;
-}
-
 function handleAnswer(args: string[]): void {
   const { flags } = parseFlags(args);
   if (!flags.stage) error("Missing --stage <slug>");
@@ -221,7 +170,8 @@ function handleAnswer(args: string[]): void {
           checkbox.state === "awaiting-approval",
       );
     const pendingDecision =
-      targetAtApprovalGate && hasPendingDecisionAtGate(pd, flags.stage);
+      targetAtApprovalGate &&
+      hasPendingDecision(pd, flags.stage, "STAGE_AWAITING_APPROVAL");
     if (targetAtApprovalGate && !pendingDecision) {
       if (
         !isAutonomousMode(content) &&

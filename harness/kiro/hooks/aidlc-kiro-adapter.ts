@@ -472,6 +472,7 @@ if (target === "state-transition-guard") {
   const tool = kiro.tool_name ?? "";
   if (tool !== "shell" && tool !== "execute_bash") process.exit(0);
   const command = String(kiro.tool_input?.command ?? "");
+  const registeredAgent = extraArgs[0] ?? "";
   const r = Bun.spawnSync(
     [process.execPath, join(HOOKS_DIR, "aidlc-state-transition-guard.ts")],
     {
@@ -480,6 +481,7 @@ if (target === "state-transition-guard") {
           hook_event_name: "PreToolUse",
           tool_name: "Bash",
           tool_input: { command },
+          ...(registeredAgent ? { agent_type: registeredAgent } : {}),
         }),
         "utf-8",
       ),

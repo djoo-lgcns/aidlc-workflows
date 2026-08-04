@@ -24,6 +24,19 @@ export const BLOCKED_STATE_TRANSITIONS = new Set([
   "park",
 ]);
 
+export const DELEGATED_STATE_MUTATIONS = new Set([
+  ...BLOCKED_STATE_TRANSITIONS,
+  "set-skeleton-stance",
+  "set-construction-iteration",
+  "acknowledge-compaction",
+  "reuse-artifact",
+  "practices-event",
+  "practices-promote",
+  "fork",
+  "merge",
+  "unpark",
+]);
+
 function maskMultilineQuotedStrings(command: string): string {
   const chars = [...command];
   for (let i = 0; i < chars.length; i++) {
@@ -156,29 +169,97 @@ export function directStateTransition(command: string): string | null {
   return null;
 }
 
-async function main(): Promise<void> {
-  if (process.stdin.isTTY) return;
+export function delegatedLifecycleCommand(command: string): string | null {
+  // A delegated agent may run build/validation shell commands, but it is never
+  // a workflow conductor. Match the authored TypeScript entrypoints at real
+  // shell command positions using the same masking rules as the direct-state
+  // guard, then classify only lifecycle/routing verbs.
+  const shellText = executableShellText(command);
+  const invocation =
+    /(?:^|&&|\|\||[;|(\n{])[ \t]*(?:(?:command|exec)\s+)?(?:env(?:\s+-[^\s]+)*\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"\n]*"|'[^'\n]*'|[^\s;&|]+)\s+)*(?:[^\s"';&|({]+\/)?bun(?:\.exe)?(?:\s+run)?\s+(?:"[^"\n]*aidlc-(orchestrate|state|jump|utility)\.ts"|'[^'\n]*aidlc-(orchestrate|state|jump|utility)\.ts'|[^\s;&|]*aidlc-(orchestrate|state|jump|utility)\.ts)\s+([a-z][a-z0-9-]*)\b/g;
+  for (const match of shellText.matchAll(invocation)) {
+    const tool = match[1] ?? match[2] ?? match[3];
+    const verb = match[4];
+    if (
+      (tool === "orchestrate" && ["next", "report", "park"].includes(verb)) ||
+      (tool === "state" && DELEGATED_STATE_MUTATIONS.has(verb)) ||
+      (tool === "jump" && verb === "execute") ||
+      (
+        tool === "utility" &&
+        ["scope-change", "config-change", "recompose", "intent-birth", "state-init"]
+          .includes(verb)
+      )
+    ) {
+      return `aidlc-${tool}.ts ${verb}`;
+    }
+  }
+
+  // The compiled dispatcher exposes the same lifecycle surface without a
+  // `.ts` filename. Keep that route equivalent to the authored scripts.
+  const compiledInvocation =
+    /(?:^|&&|\|\||[;|(\n{])[ \t]*(?:(?:command|exec)\s+)?(?:env(?:\s+-[^\s]+)*\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"\n]*"|'[^'\n]*'|[^\s;&|]+)\s+)*(?:[^\s"';&|({]+\/)?aidlc(?:\.exe)?\s+([^\s;&|]+)(?:\s+([^\s;&|]+))?/g;
+  for (const match of shellText.matchAll(compiledInvocation)) {
+    const group = match[1];
+    const verb = match[2] ?? "";
+    if (
+      ["next", "report", "park", "--resume", "--scope", "compose", "recompose", "init"]
+        .includes(group)
+    ) {
+      return `aidlc ${group}`;
+    }
+    if (group === "state" && DELEGATED_STATE_MUTATIONS.has(verb)) {
+      return `aidlc state ${verb}`;
+    }
+    if (group === "jump" && verb === "execute") {
+      return "aidlc jump execute";
+    }
+    if (group === "config" && verb === "set") {
+      return "aidlc config set";
+    }
+  }
+  return null;
+}
+
+/** The dispatchable body (`aidlc hook state-transition-guard` requires an
+ *  exported run(input)). Returns the exit code instead of process.exit so the
+ *  compiled-binary route can relay the block; the CLI entry below preserves
+ *  the direct-run contract (exit 2 + reason on stderr) byte-for-byte. */
+export async function run(input: string): Promise<number> {
   let parsed: ClaudeCodeHookInput;
   try {
-    const raw: unknown = JSON.parse(await Bun.stdin.text());
-    if (!isClaudeCodeHookInput(raw)) return;
+    const raw: unknown = JSON.parse(input);
+    if (!isClaudeCodeHookInput(raw)) return 0;
     parsed = raw;
   } catch {
-    return;
+    return 0;
   }
-  if (parsed.tool_name !== "Bash") return;
+  if (parsed.tool_name !== "Bash") return 0;
   const verb = directStateTransition(parsed.tool_input?.command ?? "");
-  if (verb === null) return;
+  if (verb !== null) {
+    process.stderr.write(
+      `Direct aidlc-state.ts ${verb} is blocked: workflow lifecycle transitions are engine-owned. ` +
+        "Use aidlc-orchestrate.ts report --stage <slug> --result " +
+        "<awaiting-approval|approved|rejected|revised|completed|skipped>; use " +
+        "aidlc-orchestrate.ts park to park, and next/jump for routing changes.\n",
+    );
+    return 2;
+  }
+
+  const agentType = parsed.agent_type?.trim() ?? "";
+  if (agentType.length === 0) return 0;
+  const delegatedCommand = delegatedLifecycleCommand(
+    parsed.tool_input?.command ?? "",
+  );
+  if (delegatedCommand === null) return 0;
 
   process.stderr.write(
-    `Direct aidlc-state.ts ${verb} is blocked: workflow lifecycle transitions are engine-owned. ` +
-      "Use aidlc-orchestrate.ts report --stage <slug> --result " +
-      "<awaiting-approval|approved|rejected|revised|completed|skipped>; use " +
-      "aidlc-orchestrate.ts park to park, and next/jump for routing changes.\n",
+    `Delegated agent "${agentType}" cannot run ${delegatedCommand}: workflow lifecycle and routing are conductor-owned. ` +
+      "Return the artifact, contribution, or review verdict to the invoking orchestrator without parking, resuming, reporting, routing, or presenting a gate.\n",
   );
-  process.exit(2);
+  return 2;
 }
 
 if (import.meta.main) {
-  await main();
+  if (process.stdin.isTTY) process.exit(0);
+  process.exit(await run(await Bun.stdin.text()));
 }

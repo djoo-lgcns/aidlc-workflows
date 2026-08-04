@@ -198,6 +198,9 @@ describe("t86 stage-protocol §13 + MEMORY_EMPTY + SKILL.md gate wiring (migrate
     expect(body.includes("blank `[Answer]:` tag")).toBe(true);
     expect(body.includes("Fill that tag only after the user responds")).toBe(true);
     expect(body.includes("Never ask for this confirmation as bare prose")).toBe(true);
+    expect(body.includes("as unordered bullets (never a numbered list)")).toBe(true);
+    expect(body.includes("every question creates a fresh")).toBe(true);
+    expect(body.includes("response-key scope")).toBe(true);
     expect(
       body.includes(
         "same **Looks correct / Request changes** structured confirmation from Step 3a",

@@ -137,8 +137,9 @@ AI-DLC installs by copying its distribution for your harness into your project.
 The steps below cover **Claude Code** (the `dist/claude/.claude/` tree). For the
 other distributions, see [Running on Kiro CLI](harnesses/kiro-cli.md),
 [Running on Kiro IDE](harnesses/kiro-ide.md), or
-[Running on Codex CLI](harnesses/codex-cli.md), or
-[AI-DLC on opencode](harnesses/opencode.md). The Claude Code implementation
+[Running on Codex CLI](harnesses/codex-cli.md),
+[AI-DLC on opencode](harnesses/opencode.md), or
+[AI-DLC on GitHub Copilot](harnesses/copilot.md). The Claude Code implementation
 ships as a `.claude/` directory that you copy into your project.
 
 The `cp` commands below run from a clone of this repository on the `v2`

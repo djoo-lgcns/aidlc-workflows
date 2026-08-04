@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.37] - 2026-08-04
+
+Adds GitHub Copilot as a first-class harness for both Copilot CLI and VS Code agent mode, with native skills, custom agents, normalized hooks, plugin composition, and deterministic workflow safeguards. **Upgrade:** copy `dist/copilot/.aidlc/`, `dist/copilot/aidlc/`, and merge `dist/copilot/.github/` plus `AGENTS.md` into the project; trust the folder in `~/.copilot/config.json`, and set `GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS=1` for headless `copilot -p` runs.
+
+* `/aidlc`, stage runners, and scope runners ship under `.github/skills/`; the 14 base personas ship as `.github/agents/aidlc-*-agent.md` custom agents and inherit the session model.
+* Approval gates and structured questions use fresh numbered prose so the human's next chat message mints presence; fixed resume choices accept exact numeric aliases `1` through `4`, and unresolved question waits no longer trigger Stop-hook continuation text that Copilot can mistake for an answer.
+* The Copilot adapter normalizes CLI and VS Code hook payloads, tool names, file lists, and response envelopes. Reviewer scope, workflow-transition ownership, malformed-input Stop enforcement, project path confinement, and locked per-session subagent attribution are enforced across both surfaces.
+* Copilot loads the engine's bounded `load-steering` directives before stage work and injects the exact active-stage rule bundle into delegated custom-agent briefs through the shared dispatch-rule guard.
+* Copilot plugin composition and selection emit agents and runners under `.github/{agents,skills}`; `/aidlc --doctor`, compiled runtime probing, binary assets, space switching, and release tests now cover Copilot alongside the existing harnesses.
+* The shared Copilot hook manifest omits VS Code's unsupported `SessionEnd`; both hosts reconcile the prior session on the next `SessionStart`.
+* New deterministic coverage includes Copilot packaging, adapter, security, plugin, doctor, and cross-harness regression tests plus the `AIDLC_COPILOT_EXEC_LIVE=1`-gated status journey.
+
 ## [2.5.36] - 2026-08-03
 
 Adds an optional declared workspace manifest for multi-repo teams. AI-DLC already auto-discovers sibling code repos on disk at intent birth; this release lets a team also declare that expected set in a `repos.json` file at the workspace root and reconcile it with a new `aidlc-workspace-sync` tool that clones missing repos, maintains a managed `.gitignore` block, and generates a VSCode multi-root workspace. The manifest is a convenience layer only: disk discovery remains the runtime source of truth, so a repo works the moment it is cloned whether or not it is declared. `--doctor` gains three advisory rows about manifest state. **Upgrade:** re-copy your `dist/<harness>/` shell to pick up the new tool; without `repos.json`, sync stays dormant and doctor adds only the advisory workspace-records row.
@@ -98,7 +110,6 @@ Closes the payload boundary 2.5.10 left open on Kiro IDE 1.x: the hook adapter n
 * Payload acquisition is gated to `audit-and-sensors` and `log-subagent`; every other target - including the per-tool-call `block` floor - touches neither channel. `SUBAGENT_COMPLETED` is recorded again on IDE 1.x: that generation sends `subagent_<agent>` rather than the 0.12 `invoke_sub_agent`, so the registration matcher reaches any delegate name, the adapter drops the `subagent_response` shell, and the row's `Agent Type` comes from the platform-provided `subagent_<agent>` tool name - agent-authored result prose can no longer misattribute a completion to another persona, and the `**Reviewer:**` / `**Agent:**` marker remains the identity source on the 0.12 `invoke_sub_agent` shape (#459/#543).
 * Both payload-dependent targets record a visible hook drop when neither channel yields a payload, so a broken context channel surfaces in `/aidlc --doctor` instead of exiting as a silent no-op.
 * Docs updated (`docs/reference/kiro-ide-hook-payload.md` documents both context channels, the timeout override, and scopes empty inputs to captured PostToolUse events; `docs/guide/harnesses/kiro-ide.md`; `docs/reference/06-hooks-and-tools.md`; `docs/roadmap.md` marks only #555's hook-registration portion resolved). No command or flag changes; no breaking change for CI or scripts.
-
 ## [2.5.11] - 2026-07-24
 
 Intent Capture now keeps generated intent and stakeholder claims grounded in the user's description, confirmed answers, workflow-selected scope, or explicitly registered memory. Unsupported content is omitted, elicited, or surfaced as a human-owned assumption instead of being presented as fact. **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the updated stage, Product Lead reviewer contract, and `claim-sources` sensor are installed.
