@@ -20,23 +20,23 @@
     "render-surface": "tui"
   },
   "counts": {
-    "total": 482,
+    "total": 487,
     "enumeratedByClass": {
-      "function": 249,
+      "function": 253,
       "audit": 74,
       "scope": 9,
       "stage": 32,
       "hook": 14,
-      "subcommand": 97,
+      "subcommand": 98,
       "render-surface": 7
     },
     "coveredByClass": {
-      "function": 104,
+      "function": 107,
       "audit": 33,
       "scope": 9,
       "stage": 9,
       "hook": 14,
-      "subcommand": 84,
+      "subcommand": 85,
       "render-surface": 7
     }
   },
@@ -992,6 +992,13 @@
     },
     {
       "unitClass": "function",
+      "unitId": "function:auditLockOwnedByProcess",
+      "minMechanism": "none",
+      "coveredBy": [],
+      "status": "UNCOVERED"
+    },
+    {
+      "unitClass": "function",
       "unitId": "function:auditShardDir",
       "minMechanism": "none",
       "coveredBy": [
@@ -1156,6 +1163,18 @@
       "coveredBy": [
         {
           "file": "tests/unit/t182-codekb-placement.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "function",
+      "unitId": "function:codekbScopeFingerprint",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/unit/t248-codekb-scope-diff.test.ts",
           "mechanism": "cli"
         }
       ],
@@ -2232,6 +2251,18 @@
     },
     {
       "unitClass": "function",
+      "unitId": "function:parseReScope",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/unit/t248-codekb-scope-diff.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "function",
       "unitId": "function:parseStageFrontmatter",
       "minMechanism": "none",
       "coveredBy": [
@@ -2746,6 +2777,18 @@
       "minMechanism": "none",
       "coveredBy": [],
       "status": "UNCOVERED"
+    },
+    {
+      "unitClass": "function",
+      "unitId": "function:scopePathCovered",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/unit/t248-codekb-scope-diff.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
     },
     {
       "unitClass": "function",
@@ -5100,6 +5143,18 @@
       "coveredBy": [
         {
           "file": "tests/unit/t182-codekb-placement.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "subcommand",
+      "unitId": "aidlc-utility codekb-scope-diff",
+      "minMechanism": "cli",
+      "coveredBy": [
+        {
+          "file": "tests/unit/t248-codekb-scope-diff.test.ts",
           "mechanism": "cli"
         }
       ],

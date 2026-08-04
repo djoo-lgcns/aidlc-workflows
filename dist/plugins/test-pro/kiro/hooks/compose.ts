@@ -28,18 +28,20 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { join, relative } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const PLUGIN_ROOT =
   process.env.CLAUDE_PLUGIN_ROOT || process.env.PLUGIN_ROOT || process.env.AIDLC_PLUGIN_ROOT || "";
-const PROJECT_DIR =
-  process.env.CLAUDE_PROJECT_DIR || process.env.AIDLC_PROJECT_DIR || process.env.PWD || process.cwd();
+const PROJECT_DIR = resolve(
+  process.env.CLAUDE_PROJECT_DIR || process.env.AIDLC_PROJECT_DIR || process.env.PWD || process.cwd(),
+);
 const HARNESS_LEAF = process.env.AIDLC_HARNESS_DIR || ".claude";
 const HARNESS_DIR = join(PROJECT_DIR, HARNESS_LEAF);
 const STAGES_DIR = join(HARNESS_DIR, "aidlc-common", "stages");
 const SKILLS_DIR = join(HARNESS_DIR, "skills");
 const PHASES = ["initialization", "ideation", "inception", "construction", "operation"];
+const COMPOSE_LOCK_RETRIES = 600;
 const SCOPE_TABLE_BEGIN =
   "<!-- BEGIN: compiled scope grid via `bun aidlc-utility.ts scope-table` - do NOT hand-edit -->";
 const SCOPE_TABLE_END = "<!-- END: compiled scope grid -->";
@@ -50,6 +52,12 @@ type ParseStageFrontmatter = (raw: string) => Record<string, unknown>;
 interface InstalledAidlcLib {
   hooksHealthDir?: (projectDir: string) => string;
   parseStageFrontmatter?: ParseStageFrontmatter;
+  acquireAuditLock?: (
+    projectDir: string,
+    maxRetries?: number,
+    retryMs?: number,
+  ) => boolean;
+  releaseAuditLock?: (projectDir: string) => void;
 }
 interface InstalledStageSchema {
   validateStageFrontmatter?: (
@@ -59,6 +67,7 @@ interface InstalledStageSchema {
 
 let installedLibPromise: Promise<InstalledAidlcLib | null> | null = null;
 let installedSchemaPromise: Promise<InstalledStageSchema | null> | null = null;
+let composeOwnsWorkspaceLock = false;
 
 function installedAidlcLib(): Promise<InstalledAidlcLib | null> {
   installedLibPromise ??= import(join(HARNESS_DIR, "tools", "aidlc-lib.ts"))
@@ -74,46 +83,42 @@ function installedStageSchema(): Promise<InstalledStageSchema | null> {
   return installedSchemaPromise;
 }
 
+function installedGraphSupportsInheritedLock(): boolean {
+  try {
+    return readFileSync(
+      join(HARNESS_DIR, "tools", "aidlc-graph.ts"),
+      "utf-8",
+    ).includes("AIDLC_WORKSPACE_LOCK_OWNER_PID");
+  } catch {
+    return false;
+  }
+}
+
 function slugFromPath(path: string): string {
   return path.replace(/\\/g, "/").split("/").pop()!.replace(/\.md$/, "");
 }
 
 function pluginNameFromRoot(): string {
   if (!PLUGIN_ROOT) return "plugin";
-  const fromContent = firstPluginFieldInPlugin();
-  if (fromContent) return fromContent;
-  for (const md of [".claude-plugin", ".codex-plugin", ".kiro-plugin"]) {
+  for (const md of [
+    ".claude-plugin",
+    ".codex-plugin",
+    ".opencode-plugin",
+    ".plugin",
+    ".kiro-plugin",
+  ]) {
     try {
       const m = JSON.parse(readFileSync(join(PLUGIN_ROOT, md, "plugin.json"), "utf-8"));
-      if (typeof m?.name === "string" && m.name) return m.name;
+      if (typeof m?.name === "string" && m.name.trim()) {
+        const hostName = m.name.trim();
+        // Emitted AIDLC plugins use aidlc-<name> as the host package ID while
+        // stage/scope ownership uses the logical <name>.
+        return hostName.startsWith("aidlc-") ? hostName.slice("aidlc-".length) : hostName;
+      }
     } catch { /* try next / fall through */ }
   }
   const parts = PLUGIN_ROOT.replace(/\\/g, "/").replace(/\/+$/, "").split("/");
   return parts[parts.length - 2] || parts[parts.length - 1] || "plugin";
-}
-
-function firstPluginFieldInPlugin(): string | null {
-  const roots = ["stages", "scopes", "contributions"];
-  const visit = (dir: string): string | null => {
-    if (!existsSync(dir)) return null;
-    for (const entry of readdirSync(dir).sort()) {
-      const path = join(dir, entry);
-      if (statSync(path).isDirectory()) {
-        const nested = visit(path);
-        if (nested) return nested;
-        continue;
-      }
-      if (!entry.endsWith(".md")) continue;
-      const m = readFileSync(path, "utf-8").match(/^plugin:\s*([a-z][a-z0-9-]*)\s*$/m);
-      if (m) return m[1];
-    }
-    return null;
-  };
-  for (const root of roots) {
-    const found = visit(join(PLUGIN_ROOT, root));
-    if (found) return found;
-  }
-  return null;
 }
 
 // The plugin's stable IDENTITY, computed once up front so every per-plugin
@@ -240,6 +245,12 @@ function installedToolCommand(tool: "utility" | "graph" | "runner", args: string
 function installedToolEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
+    // Pin the RESOLVED project dir for spawned tools: a relative
+    // CLAUDE_PROJECT_DIR inherited via process.env would re-resolve against
+    // the child's cwd (landing on <proj>/<proj>), and a path-variant spelling
+    // would key a different workspace-lock hash than the one this hook holds.
+    // AIDLC_PROJECT_DIR outranks CLAUDE_PROJECT_DIR in resolveProjectDir.
+    AIDLC_PROJECT_DIR: PROJECT_DIR,
     AIDLC_HARNESS_DIR: HARNESS_LEAF,
     AIDLC_STAGE_GRAPH: join(HARNESS_DIR, "tools", "data", "stage-graph.json"),
     AIDLC_SCOPE_GRID: join(HARNESS_DIR, "tools", "data", "scope-grid.json"),
@@ -248,6 +259,9 @@ function installedToolEnv(): NodeJS.ProcessEnv {
     AIDLC_SCOPES_DIR: join(HARNESS_DIR, "scopes"),
     AIDLC_AGENTS_DIR: join(HARNESS_DIR, "agents"),
     AIDLC_RULES_DIR: join(PROJECT_DIR, "aidlc", "spaces", "default", "memory"),
+    ...(composeOwnsWorkspaceLock
+      ? { AIDLC_WORKSPACE_LOCK_OWNER_PID: String(process.pid) }
+      : {}),
   };
 }
 
@@ -347,6 +361,57 @@ if (!existsSync(PLUGIN_ROOT)) {
   return;
 }
 
+const lockLib = await installedAidlcLib();
+if (
+  typeof lockLib?.acquireAuditLock !== "function" ||
+  typeof lockLib.releaseAuditLock !== "function" ||
+  !installedGraphSupportsInheritedLock()
+) {
+  recordDrop(
+    "plugin compose skipped: installed engine lacks shared compose/graph workspace-lock support; re-copy the current dist/<harness>/ shell and retry",
+  );
+  await flushDrops();
+  return;
+}
+// A sibling compose can legitimately hold the lock for compile + runner
+// regeneration, so queue for ~60s rather than skipping after the default ~5s.
+if (!lockLib.acquireAuditLock(PROJECT_DIR, COMPOSE_LOCK_RETRIES)) {
+  recordDrop("plugin compose skipped: could not acquire the shared workspace lock");
+  await flushDrops();
+  return;
+}
+composeOwnsWorkspaceLock = true;
+try {
+const composeFileSnapshots = new Map<string, Buffer | null>();
+let composeTransactionOpen = true;
+function writeComposeFile(path: string, data: string | Buffer): void {
+  if (composeTransactionOpen && !composeFileSnapshots.has(path)) {
+    composeFileSnapshots.set(path, existsSync(path) ? readFileSync(path) : null);
+  }
+  writeFileSync(path, data);
+}
+function commitComposeWrites(): void {
+  composeTransactionOpen = false;
+  composeFileSnapshots.clear();
+}
+function rollbackComposeWrites(): void {
+  if (!composeTransactionOpen) return;
+  const failures: string[] = [];
+  for (const [path, before] of [...composeFileSnapshots.entries()].reverse()) {
+    try {
+      if (before === null) rmSync(path, { force: true });
+      else writeFileSync(path, before);
+    } catch (e) {
+      failures.push(`${relative(PROJECT_DIR, path)}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  composeTransactionOpen = false;
+  composeFileSnapshots.clear();
+  if (failures.length > 0) {
+    recordDrop(`compose rollback could not restore ${failures.join("; ")}`);
+  }
+}
+
 if (!pluginEnabledBySelection()) {
   recordDrop(
     `plugin "${PLUGIN_NAME}" composed but is not enabled by tools/data/harness.json; run \`${selectCommandForPlugin()}\` to expose its stages, scopes, and runners`,
@@ -372,8 +437,23 @@ type CopyPrecheck = (ctx: CopyContext & { dest: string }) => boolean;
 type CopyTransform = (ctx: CopyContext) => string;
 
 function frontmatterName(content: string): string | null {
-  const name = frontmatter(content).match(/^name:\s*(.+)$/m)?.[1].trim();
-  return name || null;
+  return frontmatterScalar(content, "name");
+}
+
+function yamlScalarValue(raw: string): string | null {
+  const value = raw.trim();
+  const doubleQuoted = value.match(/^"((?:\\.|[^"])*)"(?:\s+#.*)?$/);
+  if (doubleQuoted) {
+    try {
+      return JSON.parse(`"${doubleQuoted[1]}"`) as string;
+    } catch {
+      return doubleQuoted[1];
+    }
+  }
+  const singleQuoted = value.match(/^'((?:''|[^'])*)'(?:\s+#.*)?$/);
+  if (singleQuoted) return singleQuoted[1].replaceAll("''", "'");
+  const bare = value.replace(/\s+#.*$/, "").trim();
+  return bare || null;
 }
 
 // Read one top-level frontmatter scalar for parser-unavailable safety checks.
@@ -383,17 +463,7 @@ function frontmatterScalar(content: string, key: string): string | null {
     new RegExp(`^${escapeRegExp(key)}:\\s*(.*?)\\s*$`, "m"),
   );
   if (!match) return null;
-  let value = match[1].trim();
-  if (
-    value.length >= 2 &&
-    ((value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'")))
-  ) {
-    value = value.slice(1, -1);
-  } else {
-    value = value.replace(/\s+#.*$/, "").trim();
-  }
-  return value;
+  return yamlScalarValue(match[1]);
 }
 
 function installedNameRoster(dir: string): Map<string, string> {
@@ -420,7 +490,7 @@ function installedNameCollisionPrecheck(dst: string, kind: "agents" | "scopes"):
     // `aidlc-` is core's namespace: a scope declaring an aidlc--prefixed
     // plugin: would generate a runner dir on core's `aidlc-<name>` path and
     // silently clobber it. Reject the file, mirroring the compile-side guard.
-    const declaredPlugin = frontmatter(content).match(/^plugin:\s*(.+)$/m)?.[1].trim();
+    const declaredPlugin = frontmatterScalar(content, "plugin");
     if (declaredPlugin?.startsWith("aidlc-")) {
       recordDrop(
         `plugin "${PLUGIN_NAME}" ${kind} file "${relative(PLUGIN_ROOT, file)}" declares plugin "${declaredPlugin}"; the "aidlc-" prefix is reserved for core (it collides with core runner paths); not copied`,
@@ -428,15 +498,25 @@ function installedNameCollisionPrecheck(dst: string, kind: "agents" | "scopes"):
       );
       return false;
     }
+    if (declaredPlugin !== PLUGIN_NAME) {
+      recordDrop(
+        `plugin "${PLUGIN_NAME}" ${kind} file "${relative(PLUGIN_ROOT, file)}" declares ${declaredPlugin ? `plugin "${declaredPlugin}"` : "no plugin identity"}; owned plugin content must match the host manifest identity; not copied`,
+        "degraded",
+      );
+      return false;
+    }
     const name = frontmatterName(content);
     if (!name) return true;
     const collidingFile = installedByName.get(name);
-    if (!collidingFile || collidingFile === dest) return true;
-    recordDrop(
-      `plugin "${PLUGIN_NAME}" ${kind} file "${relative(PLUGIN_ROOT, file)}" declares name "${name}", colliding with installed file "${relative(PROJECT_DIR, collidingFile)}"; not copied`,
-      "degraded",
-    );
-    return false;
+    if (collidingFile && collidingFile !== dest) {
+      recordDrop(
+        `plugin "${PLUGIN_NAME}" ${kind} file "${relative(PLUGIN_ROOT, file)}" declares name "${name}", colliding with installed file "${relative(PROJECT_DIR, collidingFile)}"; not copied`,
+        "degraded",
+      );
+      return false;
+    }
+    installedByName.set(name, dest);
+    return true;
   };
 }
 
@@ -873,13 +953,15 @@ async function installedStageSchemaPrecheck(): Promise<CopyPrecheck> {
     validate = schema.validateStageFrontmatter;
   }
   return ({ file, rel, content }) => {
-    if (!file.endsWith(".md") || !parse || !validate) return true;
-    let errors: string[];
-    try {
-      const res = validate(parse(content));
-      errors = res.valid ? [] : (res.errors ?? ["schema validation failed"]);
-    } catch (e) {
-      errors = [e instanceof Error ? e.message : String(e)];
+    if (!file.endsWith(".md")) return true;
+    let errors: string[] = [];
+    if (parse && validate) {
+      try {
+        const res = validate(parse(content));
+        errors = res.valid ? [] : (res.errors ?? ["schema validation failed"]);
+      } catch (e) {
+        errors = [e instanceof Error ? e.message : String(e)];
+      }
     }
     if (errors.length === 0) {
       const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
@@ -891,13 +973,14 @@ async function installedStageSchemaPrecheck(): Promise<CopyPrecheck> {
     // compile-time THROWS, so a landed file violating them bricks the whole
     // graph compile exactly like a schema-invalid one.
     if (errors.length === 0) {
-      const fmBlock = frontmatter(content);
-      const declaredPlugin = fmBlock.match(/^plugin:\s*(.+)$/m)?.[1].trim();
-      const declaredSlug = fmBlock.match(/^slug:\s*(.+)$/m)?.[1].trim() ?? "";
+      const declaredPlugin = frontmatterScalar(content, "plugin");
+      const declaredSlug = frontmatterScalar(content, "slug") ?? "";
       if (declaredPlugin === "aidlc") {
         errors = ['declares plugin "aidlc"; omit plugin for core stages'];
       } else if (declaredPlugin?.startsWith("aidlc-")) {
         errors = [`declares plugin "${declaredPlugin}"; the "aidlc-" prefix is reserved for core (a plugin named aidlc-<x> collides with core runner paths)`];
+      } else if (declaredPlugin !== PLUGIN_NAME) {
+        errors = [`declares ${declaredPlugin ? `plugin "${declaredPlugin}"` : "no plugin identity"}; owned plugin content must match the host manifest identity "${PLUGIN_NAME}"`];
       } else if (declaredPlugin && !declaredSlug.startsWith(`${declaredPlugin}-`)) {
         errors = [`slug "${declaredSlug}" does not start with "${declaredPlugin}-" (plugin-owned stage slugs must carry the plugin prefix)`];
       }
@@ -964,7 +1047,7 @@ function copyTreeNoClobber(
       buf = Buffer.from(transform({ file, rel, content: buf.toString("utf-8") }));
     }
     mkdirSync(join(dest, ".."), { recursive: true });
-    writeFileSync(dest, buf);
+    writeComposeFile(dest, buf);
     wrote = true;
   }
   return wrote;
@@ -994,6 +1077,7 @@ function frontmatter(content: string): string {
 // contribution sidecar records actually-added entries, never declared ones, so
 // a later removal can't strip a value core (or another plugin) already had.
 function mergeListField(content: string, field: string, items: string[], target: string, added?: string[]): string {
+  items = [...new Set(items)];
   if (items.length === 0) return content;
   const emptyRe = new RegExp(`^${field}:\\s*\\[\\s*\\]\\s*$`, "m");
   if (emptyRe.test(content)) {
@@ -1006,7 +1090,11 @@ function mergeListField(content: string, field: string, items: string[], target:
     recordDrop(`contribution to ${target}: no '${field}:' field to append to (adds dropped)`);
     return content;
   }
-  const existing = new Set([...m[1].matchAll(/^ {2}- (.+)$/gm)].map((x) => x[1].trim()));
+  const existing = new Set(
+    [...m[1].matchAll(/^ {2}- (.+)$/gm)]
+      .map((x) => yamlScalarValue(x[1]))
+      .filter((value): value is string => value !== null),
+  );
   const toAdd = items.filter((i) => !existing.has(i));
   if (toAdd.length === 0) return content;
   added?.push(...toAdd);
@@ -1252,10 +1340,10 @@ try {
   // (structural adds carry no in-file provenance, unlike the sentinel-marked
   // prose fragments), keyed by target stage. select-plugins reads it to strip
   // a disabled plugin's merged entries - without it, disable left the plugin's
-  // produces/sensors/consumes welded into enabled core stages. Accumulated
+  // produces/sensors/consumes/scopes welded into enabled core stages. Accumulated
   // across re-runs: entries this run added are unioned into any prior record
   // (an idempotent re-compose adds nothing and must not erase the record).
-  type StageContribRecord = { produces?: string[]; sensors?: string[]; consumes?: string[]; required_sections?: string[]; required_sections_created?: boolean };
+  type StageContribRecord = { produces?: string[]; sensors?: string[]; consumes?: string[]; scopes?: string[]; required_sections?: string[]; required_sections_created?: boolean };
   const contribManifestPath = join(HARNESS_DIR, "tools", "data", `plugin-contrib-${PLUGIN_KEY}.json`);
   const contribManifest: Record<string, StageContribRecord> = (() => {
     try {
@@ -1285,6 +1373,12 @@ try {
   // disable-time strip on the very next session start). The advisory drop at
   // the top of this run already names the select-plugins command to enable.
   const contribPhases = pluginEnabledBySelection() && existsSync(contribRoot) ? readdirSync(contribRoot) : [];
+  // Installed scope roster for the adds.scopes guards, keyed by frontmatter
+  // `name:` (the runtime's scope identity — core files carry the `aidlc-`
+  // stem prefix, so filename lookup would miss them). Snapshotted once here:
+  // this plugin's own scope files were already copied in above, and
+  // contributions must not conjure new scope files.
+  const installedScopes = installedNameRoster(join(HARNESS_DIR, "scopes"));
   for (const phase of contribPhases) {
     const phaseDir = join(contribRoot, phase);
     let files: string[];
@@ -1299,12 +1393,12 @@ try {
       const content = readFileSync(join(phaseDir, file), "utf-8")
         .replace(/\r\n/g, "\n").replace(/^﻿/, "").replace(/^\n+/, "");
       const fm = frontmatter(content);
-      const target = fm.match(/^target:\s*(.+)$/m)?.[1].trim();
+      const target = frontmatterScalar(content, "target");
       // A .md in contributions/ with no parseable `target:` is a malformed
       // contribution — log it (a present-but-unknown target is already logged
       // below; a missing one was a silent bare continue).
       if (!target) { recordDrop(`contribution "${file}" has no parseable frontmatter target: — skipped (check for a BOM, a leading blank line, or a missing target: key)`); continue; }
-      const plugin = fm.match(/^plugin:\s*(.+)$/m)?.[1].trim() ?? "";
+      const plugin = frontmatterScalar(content, "plugin") ?? "";
       // `bundle:` was the pre-rename ownership key. It is dead, not aliased —
       // drop-log with the fix named so a stale plugin tree fails visibly
       // instead of composing under wrong or ambiguous ownership.
@@ -1316,6 +1410,12 @@ try {
       // so a plugin containing `:` would break the peer-block scan's `[^:]+` and
       // silently misorder splices. Reject it up front (round-6).
       if (plugin.includes(":")) { recordDrop(`contribution "${file}" has an invalid plugin "${plugin}" (must not contain ':'); skipped`); continue; }
+      if (plugin !== PLUGIN_NAME) {
+        recordDrop(
+          `contribution "${file}" declares ${plugin ? `plugin "${plugin}"` : "no plugin identity"}; owned plugin content must match the host manifest identity "${PLUGIN_NAME}"; skipped`,
+        );
+        continue;
+      }
       const stageFile = findStageFile(target);
       if (!stageFile) { recordDrop(`contribution "${file}" targets missing stage "${target}"`); continue; }
 
@@ -1325,9 +1425,12 @@ try {
       // regex stops at the first non-4-space entry, so a mis-indented line
       // silently truncated the list (entries after it vanished with no log).
       const listOf = (f: string): string[] => {
-        const s = addsBlock.match(new RegExp(`^ {2}${f}:\\n((?: {4}- [\\w-]+\\n?)*)`, "m"));
-        const parsed = s ? [...s[1].matchAll(/^ {4}- ([\w-]+)/gm)].map((x) => x[1]) : [];
         const declaredBlock = addsBlock.match(new RegExp(`^ {2}${f}:\\n((?:\\s+- .*\\n?)*)`, "m"))?.[1] ?? "";
+        const parsed: string[] = [];
+        for (const entry of declaredBlock.matchAll(/^ {4}- (.+?)\s*$/gm)) {
+          const value = yamlScalarValue(entry[1]);
+          if (value && /^[\w-]+$/.test(value)) parsed.push(value);
+        }
         const declared = (declaredBlock.match(/^\s+- /gm) ?? []).length;
         if (declared > parsed.length) {
           recordDrop(`contribution to ${target}: parsed ${parsed.length} of ${declared} adds.${f} entries (check indentation - entries must be 4-space "    - kebab-name"); some dropped`);
@@ -1363,14 +1466,15 @@ try {
       })();
 
       // Drop-log any adds.* key compose does not implement — no silent no-op.
-      // Implemented merge surfaces: produces / sensors / consumes / required_sections.
-      // A documented-but-deferred surface (e.g. scopes) is recorded as a drop so an
-      // author sees it had no effect, per the no-silent-failures contract. (When a
-      // surface graduates, add it to IMPLEMENTED_ADDS + a merge call below.)
-      const IMPLEMENTED_ADDS = new Set(["produces", "sensors", "consumes", "required_sections"]);
+      // Implemented merge surfaces: produces / sensors / consumes / scopes /
+      // required_sections. A documented-but-deferred surface (e.g.
+      // requires_stage) is recorded as a drop so an author sees it had no
+      // effect, per the no-silent-failures contract. (When a surface
+      // graduates, add it to IMPLEMENTED_ADDS + a merge call below.)
+      const IMPLEMENTED_ADDS = new Set(["produces", "sensors", "consumes", "scopes", "required_sections"]);
       for (const km of addsBlock.matchAll(/^ {2}([a-z_]+):/gm)) {
         if (!IMPLEMENTED_ADDS.has(km[1])) {
-          recordDrop(`contribution to ${target}: adds.${km[1]} is not yet an implemented merge surface (only produces/sensors/consumes/required_sections); ignored`, "advisory");
+          recordDrop(`contribution to ${target}: adds.${km[1]} is not yet an implemented merge surface (only produces/sensors/consumes/scopes/required_sections); ignored`, "advisory");
         }
       }
 
@@ -1396,10 +1500,36 @@ try {
       // stage (mixed endings). Contribution content is already normalized above.
       let stageContent = readFileSync(stageFile, "utf-8").replace(/\r\n/g, "\n");
       const before = stageContent;
-      const addedProduces: string[] = [], addedSensors: string[] = [], addedConsumes: string[] = [], addedSections: string[] = [];
+      const addedProduces: string[] = [], addedSensors: string[] = [], addedConsumes: string[] = [], addedScopes: string[] = [], addedSections: string[] = [];
       const sectionsMeta: { created?: boolean } = {};
+      // adds.scopes — set-union the target stage into this plugin's scopes.
+      // Two guard rails, both drop-logged: the scope's identity file must
+      // already be installed (a name with no scopes/*.md declaring it
+      // resolves as an all-SKIP phantom with no diagnostic), and that file's
+      // `plugin:` frontmatter must name THIS plugin exactly — welding a core
+      // stage into a core or foreign-plugin scope changes selection semantics
+      // the other owner never agreed to. Ownership comes from the installed
+      // file's declared owner, NOT a name-prefix rule: a plugin named `a`
+      // must not pass for plugin `a-b`'s scope `a-b-x` (dash prefixes overlap
+      // across plugin names). A core scope declares no `plugin:` and never
+      // merges. Resolution is by frontmatter `name:` (the runtime's scope
+      // identity), not filename — core files carry the `aidlc-` stem prefix.
+      const mergeableScopes = listOf("scopes").filter((s) => {
+        const scopeFile = installedScopes.get(s);
+        if (!scopeFile) {
+          recordDrop(`contribution to ${target}: adds.scopes "${s}" has no installed scope file (no scopes/*.md declares name "${s}"); dropped`);
+          return false;
+        }
+        const owner = frontmatterScalar(readFileSync(scopeFile, "utf-8"), "plugin");
+        if (owner !== PLUGIN_NAME) {
+          recordDrop(`contribution to ${target}: adds.scopes "${s}" is not owned by plugin "${PLUGIN_NAME}" (installed ${basename(scopeFile)} declares ${owner ? `plugin "${owner}"` : "no plugin: field (core-owned)"}; only this plugin's own scopes merge); dropped`);
+          return false;
+        }
+        return true;
+      });
       stageContent = mergeListField(stageContent, "produces", listOf("produces"), target, addedProduces);
       stageContent = mergeListField(stageContent, "sensors", listOf("sensors"), target, addedSensors);
+      stageContent = mergeListField(stageContent, "scopes", mergeableScopes, target, addedScopes);
       stageContent = mergeConsumes(stageContent, consumes, target, addedConsumes);
       // Only merge required_sections if the installed engine accepts the key —
       // otherwise skip + drop-log rather than break the install's next compile.
@@ -1411,12 +1541,13 @@ try {
       recordContrib(target, "produces", addedProduces);
       recordContrib(target, "sensors", addedSensors);
       recordContrib(target, "consumes", addedConsumes);
+      recordContrib(target, "scopes", addedScopes);
       recordContrib(target, "required_sections", addedSections);
       if (sectionsMeta.created) {
         contribManifest[target] ??= {};
         contribManifest[target].required_sections_created = true;
       }
-      if (addedProduces.length || addedSensors.length || addedConsumes.length || addedSections.length) {
+      if (addedProduces.length || addedSensors.length || addedConsumes.length || addedScopes.length || addedSections.length) {
         contribManifestDirty = true;
       }
 
@@ -1489,7 +1620,7 @@ try {
       }
 
       if (stageContent !== before) { // compare-before-write (review #11)
-        writeFileSync(stageFile, stageContent);
+        writeComposeFile(stageFile, stageContent);
         changed = true;
       }
     }
@@ -1501,7 +1632,7 @@ try {
   if (contribManifestDirty) {
     try {
       mkdirSync(join(HARNESS_DIR, "tools", "data"), { recursive: true });
-      writeFileSync(contribManifestPath, `${JSON.stringify(contribManifest, null, 2)}\n`);
+      writeComposeFile(contribManifestPath, `${JSON.stringify(contribManifest, null, 2)}\n`);
     } catch (e) {
       recordDrop(`could not write the contribution sidecar ${relative(PROJECT_DIR, contribManifestPath)}: ${e instanceof Error ? e.message : String(e)} - disabling this plugin will not strip its merged contributions`, "advisory");
     }
@@ -1576,10 +1707,12 @@ try {
     });
     if (r.status !== 0) {
       recordDrop(`aidlc-graph compile failed: ${(r.stderr || "").slice(0, 400)}`);
+      rollbackComposeWrites();
       if (pluginKeySafe) {
         try { mkdirSync(join(PROJECT_DIR, "aidlc"), { recursive: true }); writeFileSync(retryMarker, new Date().toISOString() + "\n"); } catch { /* best-effort */ }
       }
     } else {
+      commitComposeWrites();
       recompiled = true;
       if (retryPending) {
         try { rmSync(retryMarker, { force: true }); } catch { /* best-effort */ }
@@ -1612,9 +1745,15 @@ try {
       if (pluginShipsScopes) runRunnerGen(["scopes"], "scopes");
     }
   }
+  commitComposeWrites();
 } catch (e) {
+  rollbackComposeWrites();
   recordDrop(`compose threw: ${e instanceof Error ? e.message : String(e)}`);
   // Non-fatal: never break the user's session over a compose failure.
+}
+} finally {
+  composeOwnsWorkspaceLock = false;
+  lockLib.releaseAuditLock(PROJECT_DIR);
 }
 
 // Flush any recorded drops to the installed hooks-health dir (--doctor surfaces

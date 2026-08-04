@@ -12,7 +12,7 @@ This chapter is the canonical reference for the **AIDLC plugin** system: an opti
 
 A plugin is a directory (and a git repository) with a declarative manifest and core-shaped subtrees. It can:
 
-- **add** new stages (in their own display-number range), agents, scopes, method/rules (into the space memory seed), and sensors; and
+- **add** new stages (numbered by the engine on first compile — a plugin claims no display-number range), agents, scopes, method/rules (into the space memory seed), and sensors; and
 - **modify** existing core stages **additively** via the contribution seam (§6) — enriching what a stage produces, consumes, checks, and instructs, without editing it.
 
 First-party plugins (shipped by the AIDLC team) and third-party plugins (anyone else) are **mechanically identical** — same structure, same seams, same composer, same host-install path. The only difference is provenance: whose repository the plugin lives in and who reviewed it. `plugins/test-pro/` is the reference fixture.
@@ -176,12 +176,18 @@ explicit `--scope`.
 
 Disabling a plugin also removes what it merged into core stages, not just its
 own files. Compose records the structural adds it actually applied (produces /
-sensors / consumes / required_sections, per target stage) in a per-plugin
+sensors / consumes / scopes / required_sections, per target stage) in a per-plugin
 sidecar at `tools/data/plugin-contrib-<key>.json`; spliced prose fragments carry
 their own sentinel markers. On disable, `select-plugins` strips both from the
 installed stage source inside the same rollback transaction, so a disabled
 plugin's contributions stop steering enabled stages. Re-enabling restores them
 on the next session start: the plugin's compose hook re-merges, byte-identical.
+
+Compose hooks and `select-plugins` serialize these mutations on the same
+workspace lock. The lock spans installed stage edits, per-plugin sidecars,
+selection writes, graph/grid compilation, and selection rollback, so concurrent
+plugin hooks cannot lose one another's set-union updates and a disable cannot
+race with compose to leave an untracked contribution active.
 
 Selection is closure-checked at compile time: an enabled stage may not require
 an artifact whose only producer stages are disabled. The error names the
@@ -245,7 +251,7 @@ fragments:                    # PROSE — spliced into the stage body
 
 **Merge semantics:**
 
-- **Structural surfaces** — **set union** into the target stage's source frontmatter. Commutative, order-independent, safe across uncoordinated authors. *Implemented today:* `produces`, `consumes` (artifact + `required` + `conditional_on`, each preserved), `sensors`, `required_sections`. *Not yet merged (deferred):* `adds.scopes` and `adds.requires_stage` — a contribution may declare them, but the compose hook records them to the drops log (`--doctor` surfaces it) rather than merging, so their absence is visible, never silent. When these graduate they set-union like the others.
+- **Structural surfaces** — **set union** into the target stage's source frontmatter. Commutative, order-independent, safe across uncoordinated authors. *Implemented today:* `produces`, `consumes` (artifact + `required` + `conditional_on`, each preserved), `sensors`, `scopes`, `required_sections`. `adds.scopes` carries two guard rails: the scope's identity file must already be installed (a name with no `scopes/<name>.md` would resolve as an all-SKIP phantom), and that installed file's `plugin:` frontmatter must name the contributing plugin exactly — putting a core stage under a core or foreign-plugin scope changes selection semantics the other owner never agreed to, and ownership comes from the file's declared owner, not a name-prefix rule (dash prefixes overlap across plugin names; a core scope declares no `plugin:` and never merges); a violating entry is dropped-with-log, never merged. *Not yet merged (deferred):* `adds.requires_stage` — a contribution may declare it, but the compose hook records it to the drops log (`--doctor` surfaces it) rather than merging, so its absence is visible, never silent. When it graduates it set-unions like the others.
 - **Prose fragments** (`fragments` of step/question prose) — spliced into the stage body at the declared anchor, ordered deterministically by `(order, plugin)`. Each spliced block is wrapped in a content-hashed sentinel, so re-composing is idempotent, an upgraded fragment replaces its prior block, and blocks from separate plugins interleave by `(order, plugin)` regardless of hook-firing order. The agent reads base body + ordered fragments at runtime.
 - **No override, ever.** A contribution can only add. It cannot change a stage's `lead_agent`, relax a `consumes[].required`, remove a field, or replace existing step prose. A genuine need to *change* upstream behavior is a framework-level decision, never a quiet patch inside a plugin.
 
@@ -269,7 +275,7 @@ fragments:                    # PROSE — spliced into the stage body
 | Add a verification to a stage | `adds.sensors` (+ ship the manifest and `tools/` script) | ✅ implemented |
 | Add a consume edge | `adds.consumes` | ✅ implemented |
 | Add a `requires_stage` edge | `adds.requires_stage` | ⏳ deferred (declared → logged, not merged) |
-| Put an existing stage under a plugin scope | `adds.scopes` (or the scope's own `includes_*` — §7) | ⏳ deferred (declared → logged, not merged) |
+| Put an existing stage under a plugin scope | `adds.scopes` (own-plugin scopes only; installed identity file required) | ✅ implemented |
 | Inject phase policy / guardrails | ship `memory/phases/<p>.md` into the default-space seed (§7) | ⏳ deferred (not yet projected) |
 
 ## 7. Method/rules, agents, knowledge, scopes, and activation
@@ -329,8 +335,9 @@ clobbering. Membership on plugin-authored stages works through those stages'
 `scopes:` frontmatter. A plugin scope may set `freeform_default: true` to
 nominate itself when the preferred core default is disabled; at most one
 enabled scope may claim the nomination, and graph compilation rejects an
-ambiguous selected set. Adding a plugin scope to an existing core stage via
-`adds.scopes` remains deferred and is logged-not-merged (§6).
+ambiguous selected set. Adding a plugin scope to an existing core stage works
+through a contribution's `adds.scopes` (§6) — own-plugin scopes only, and the
+scope file must be installed before the merge.
 
 **Activation (`when:`)** *(⚠️ parsed, not evaluated).* A stage may carry a structured `when:` predicate; `{producer-in-plan: X}` is schema-validated and parsed, but **no engine consumer evaluates it yet** — `aidlc-graph` names itself the future home. So a stage carrying `when:` is today EXECUTE under its declared scopes unconditionally. A plugin's own stages exist only when the plugin is in the chosen set, so "is this plugin active" is already a compose-time fact.
 
@@ -348,6 +355,16 @@ Independent authors who never coordinate are kept safe by:
 ## 9. As-built: emission, install, and the worked example
 
 `bun scripts/package.ts` discovers `plugins/<name>/` (any dir with `.aidlc-plugin/plugin.json`) and emits a per-harness host plugin at `dist/plugins/<name>/<harness>/` — one more projection target alongside the four harness trees. Each projection carries the host-native manifest (`.claude-plugin/` / `.codex-plugin/` / `.kiro-plugin/`), a `marketplace.json`, the compose hook, and the plugin's content (stages with full `number`/`plugin`/`when` frontmatter — the schema accepts them natively). The compose hook is a single portable `compose.ts` (bun — no GNU-specific shell) that is **harness-agnostic**: plugin root resolves from `CLAUDE_PLUGIN_ROOT | PLUGIN_ROOT | AIDLC_PLUGIN_ROOT`, project dir from `CLAUDE_PROJECT_DIR | AIDLC_PROJECT_DIR | PWD` (Codex leaves the project-dir var unset — PWD is the fallback), and the harness leaf from `AIDLC_HARNESS_DIR`, which each host's hook command exports. It copies new stages/scopes/agents/knowledge/sensors/tools without clobbering, merges the seam idempotently (content-hashed sentinel splices, compare-before-write), and records any contribution it has to drop (missing target, malformed anchor, a key the installed engine won't accept) to per-plugin `<hooksHealthDir>/plugin-compose-<key>.drops` files — the same per-space health dir core hooks write to and `/aidlc --doctor` scans — rather than failing the session. Sensor manifests carry an extra copy-time guard: discovery flatly scans `sensors/` and indexes only basenames matching `aidlc-<id>.md`, so a plugin manifest under any other name (or nested in a subdirectory) would compose but never fire. Compose rejects such a manifest and records a degraded drop naming the file and the required shape, and reports one an older compose hook already landed the same way on the next run, so a mis-named sensor is never silently dead on disk.
+
+The emitted host manifest is authoritative for plugin identity: compose maps
+the host package ID `aidlc-<name>` back to logical `<name>` and rejects owned
+stage, scope, agent, or contribution content whose `plugin:` field differs.
+Incoming scope/agent names are reserved as each file is accepted, so duplicate
+identities within one plugin tree are dropped before compilation. Structural
+list comparisons canonicalize quoted and unquoted YAML scalars. Compose also
+holds the realpath-keyed workspace lock for the full transaction; if graph
+compilation fails, newly copied files and contribution writes are restored
+before the retry marker is written.
 
 The emitted SessionStart command probes for `aidlc` on `PATH` first and runs
 `aidlc plugin sync` when it is available. If no `aidlc` binary is found, it falls
@@ -381,7 +398,7 @@ Then `/aidlc plugin list` and `/aidlc --doctor` reflect the enabled set (e.g. a 
 
 **Worked example — test-pro across a mixed fleet.** A platform team publishes `test-pro` once (author against `core/`, `bun scripts/package.ts`, push a `<plugin>--v<version>` tag, drop a `marketplace.json`). Claude teams `/plugin install`; Codex teams `codex plugin add` (approve trust once); Kiro teams `git pull` + run the composer explicitly (above). In every case the composer merges test-pro's two new stages **and** its contributions to `build-and-test`/`nfr-requirements`/`nfr-design`/`performance-validation` — the same enriched, 34-stage, doctor-clean install. Validated across all four harness projections (Claude, Codex, Kiro CLI, Kiro IDE).
 
-**Status.** Implemented and validated: schema support for `number`/`name`/`plugin`/`when` (`aidlc-stage-schema.ts`); compile-side carry-through of authored `plugin` ownership into compiled stage nodes (core omits the field); install-time selection through `harness.json` + `select-plugins`, including full-graph persistence, filtered runtime loading, closure checks, runner pruning, doctor rows, and compose advisory drops; `aidlc plugin list` and `aidlc plugin sync`; plugin-namespaced stage/scope runner generation; the packager emitter (every discovered harness projection); projection and no-clobber compose for plugin `stages/`, `scopes/`, `agents/`, `knowledge/`, `sensors/`, and `tools/`; the harness-agnostic compose hook (`scripts/plugin-hooks-template/compose.ts`); the contribution seam for `produces` / `consumes` / `sensors` / `required_sections` + prose fragments (content-hashed, idempotent, order-deterministic). Guarded by `tests/integration/t188-plugin-compose.test.ts` (the compose mechanism), `tests/integration/t224-plugin-selection.test.ts` (selection), and each plugin's own `tests/` (content; wired into the integration tier). **Deferred / not yet wired:** projection/merge of a plugin's `memory/` subtree; `adds.scopes` / `adds.requires_stage` merge (declared → logged); `when:` predicate evaluation (parsed, no engine consumer); machine-enforcement of merged `required_sections` (the field merges + validates but does not reach the compiled node, and the shipped required-sections sensor derives its expectations from templates — nothing fails a stage for a missing declared section yet); the `after-questions` fragment anchor (`locateAnchor` has no case — it drop-logs "unknown anchor"; use `after-step:<n>`); reading `aidlc.contributes` / any lockfile / `dependencies`; and compile-side carry-through of authored `number` into the compiled node (stages still use re-seeded/pinned numbers today).
+**Status.** Implemented and validated: schema support for `number`/`name`/`plugin`/`when` (`aidlc-stage-schema.ts`); compile-side carry-through of authored `plugin` ownership into compiled stage nodes (core omits the field); install-time selection through `harness.json` + `select-plugins`, including full-graph persistence, filtered runtime loading, closure checks, runner pruning, doctor rows, and compose advisory drops; `aidlc plugin list` and `aidlc plugin sync`; plugin-namespaced stage/scope runner generation; the packager emitter (every discovered harness projection); projection and no-clobber compose for plugin `stages/`, `scopes/`, `agents/`, `knowledge/`, `sensors/`, and `tools/`; the harness-agnostic compose hook (`scripts/plugin-hooks-template/compose.ts`); the contribution seam for `produces` / `consumes` / `sensors` / `scopes` (own-plugin, installed-file-guarded) / `required_sections` + prose fragments (content-hashed, idempotent, order-deterministic). Guarded by `tests/integration/t188-plugin-compose.test.ts` (the compose mechanism), `tests/integration/t224-plugin-selection.test.ts` (selection), and each plugin's own `tests/` (content; wired into the integration tier). **Deferred / not yet wired:** projection/merge of a plugin's `memory/` subtree; `adds.requires_stage` merge (declared → logged); `when:` predicate evaluation (parsed, no engine consumer); machine-enforcement of merged `required_sections` (the field merges + validates but does not reach the compiled node, and the shipped required-sections sensor derives its expectations from templates — nothing fails a stage for a missing declared section yet); the `after-questions` fragment anchor (`locateAnchor` has no case — it drop-logs "unknown anchor"; use `after-step:<n>`); and reading `aidlc.contributes` / any lockfile / `dependencies`. Number seeding for NEW slugs is edge-aware: a first compile orders each phase's batch of new stages by their own `requires_stage` edges (ties break by the authored `number:` hint, then slug) and assigns next-free contiguous indices in that order — the engine owns all number values (authors claim none, so uncoordinated plugins cannot collide), a multi-stage plugin's sub-DAG seeds in flow order regardless of filenames, and an already-pinned row keeps its JSON values. Authored `name:` seeds the display name for a new slug.
 
 ## 9. Invariants
 

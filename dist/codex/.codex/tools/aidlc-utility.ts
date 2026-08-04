@@ -28,6 +28,7 @@ import {
   validateScope,
 } from "./aidlc-graph.ts";
 import { repointHarnessIncludes } from "./aidlc-includes.ts";
+import { workspaceManifestChecks } from "./aidlc-workspace-doctor.ts";
 import {
   activeIntent,
   activeSpace,
@@ -54,8 +55,11 @@ import {
   isoTimestamp,
   isPackageJson,
   codekbRepoName,
+  codekbScopeFingerprint,
+  parseReScope,
   relativeCodekbDir,
   RESERVED_RECORD_NAMES,
+  scopePathCovered,
   gridCostSummary,
   listIntents,
   listSpaces,
@@ -137,6 +141,9 @@ const VALID_TEST_STRATEGIES: Record<string, string> = {
 };
 
 const CONFIG_KEYS = ["depth", "test-strategy"] as const;
+// These workspace transactions can legitimately queue behind a full plugin
+// compose (compile + runner regeneration), so they share its ~60s lock budget.
+const WORKSPACE_MUTATION_LOCK_RETRIES = 600;
 const NO_STATE_FILE_MESSAGE =
   "No state file found. Start a workflow first by describing what to build (/aidlc \"build the auth service\").";
 const INIT_TRANSITION_MESSAGE =
@@ -434,6 +441,9 @@ function runBunTool(projectDir: string, rel: string, args: string[], label: stri
       ...process.env,
       AIDLC_HARNESS_DIR: harnessDir(),
       AIDLC_PROJECT_DIR: projectDir,
+      ...(holdsAuditLock(projectDir)
+        ? { AIDLC_WORKSPACE_LOCK_OWNER_PID: String(process.pid) }
+        : {}),
     },
   });
   if (result.exitCode !== 0) {
@@ -521,7 +531,7 @@ function regenerateSelectionSurfaces(projectDir: string): void {
 // --- disable-time contribution strip -----------------------------------------
 //
 // Compose merges a plugin's structural adds (produces/sensors/consumes/
-// required_sections) into CORE stage source, where no selection filter
+// scopes/required_sections) into CORE stage source, where no selection filter
 // reaches, and records what it actually added in a per-plugin sidecar
 // (tools/data/plugin-contrib-<key>.json). Prose fragments carry their own
 // sentinel markers. On disable, select-plugins strips both, so a disabled
@@ -532,6 +542,7 @@ interface StageContribRecord {
   produces?: string[];
   sensors?: string[];
   consumes?: string[];
+  scopes?: string[];
   required_sections?: string[];
   required_sections_created?: boolean;
 }
@@ -554,12 +565,26 @@ function removeListValues(content: string, field: string, values: ReadonlySet<st
   const blockRe = new RegExp(`^${field}:\\n((?:  - .+\\n)*)`, "m");
   const m = content.match(blockRe);
   if (!m) return content;
-  const kept = [...m[1].matchAll(/^ {2}- (.+)$/gm)]
-    .map((x) => x[1])
-    .filter((v) => {
-      const bare = v.trim().replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
-      return !values.has(bare) && !values.has(v.trim());
+  const entries = [...m[1].matchAll(/^ {2}- (.+)$/gm)].map((x) => x[1]);
+  const removeIndexes = new Set<number>();
+  const remaining = new Set(values);
+  // Compose renders ordinary structural additions unquoted. Prefer that exact
+  // spelling so a legacy sidecar cannot remove an equivalent quoted membership
+  // that predated the plugin.
+  for (let i = 0; i < entries.length; i++) {
+    if (remaining.delete(entries[i].trim())) removeIndexes.add(i);
+  }
+  // required_sections are rendered quoted while their sidecar values are bare.
+  // Remove at most one canonical match for each recorded addition.
+  for (const value of remaining) {
+    const index = entries.findIndex((entry, i) => {
+      if (removeIndexes.has(i)) return false;
+      const bare = entry.trim().replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+      return bare === value;
     });
+    if (index !== -1) removeIndexes.add(index);
+  }
+  const kept = entries.filter((_, i) => !removeIndexes.has(i));
   const replacement = kept.length > 0
     ? `${field}:\n${kept.map((v) => `  - ${v}`).join("\n")}\n`
     : dropEmptyField ? "" : `${field}: []\n`;
@@ -637,6 +662,7 @@ function stripDisabledPluginContributions(
         if (record) {
           if (record.produces?.length) content = removeListValues(content, "produces", new Set(record.produces), false);
           if (record.sensors?.length) content = removeListValues(content, "sensors", new Set(record.sensors), false);
+          if (record.scopes?.length) content = removeListValues(content, "scopes", new Set(record.scopes), false);
           if (record.consumes?.length) content = removeConsumesEntries(content, new Set(record.consumes));
           if (record.required_sections?.length) {
             content = removeListValues(content, "required_sections", new Set(record.required_sections), record.required_sections_created === true);
@@ -727,71 +753,79 @@ function handleSelectPlugins(projectDir: string, positional: string[]): void {
   if (parsedSelection.hasEmpty || parsedSelection.names.length === 0) {
     die("select-plugins requires at least one non-empty plugin name, or no arguments to print the current selection.");
   }
-  const known = knownPluginNames();
-  const knownSet = new Set(known);
-  const unknown = parsedSelection.names.filter((name) => !knownSet.has(name));
-  if (unknown.length > 0) {
-    die(`Unknown plugin name(s): ${unknown.join(", ")}. Valid plugins: ${known.join(", ")}.`);
-  }
   const names = [...new Set(parsedSelection.names)].sort();
   requireInstalledHarness(projectDir);
 
-  const violations = activeWorkflowDependencyViolations(projectDir, new Set(names));
-  if (violations.length > 0) {
-    die(
-      `select-plugins refused: the new selection would strand ${violations.length} active workflow dependency(ies):\n` +
-        violations.map((v) => `  - ${v}`).join("\n") +
-        `\nComplete or park the workflow(s) first (or keep the plugin enabled), then re-run select-plugins.`,
-    );
-  }
-
-  const previousSelection = renderPluginSelection(pluginsEnabled());
-  const newSelection = names.join(", ");
-  const nameSet = new Set(names);
-  // Plugins this change DISABLES (known but not selected; the implicit core
-  // plugin has no composed contributions to strip).
-  const disabling = known.filter((n) => n !== "aidlc" && !nameSet.has(n));
-
-  const snapshots = [
-    snapshotFile(mutableHarnessDataPath(projectDir)),
-    snapshotFile(stageGraphDataPath(projectDir)),
-    snapshotFile(scopeGridDataPath(projectDir)),
-  ];
-
-  try {
-    // Strip disabled plugins' merged contributions BEFORE recompiling, so the
-    // regenerated graph no longer carries their produces/sensors/consumes on
-    // core stages. Mutated stage files join `snapshots`, so the catch-side
-    // rollback restores them too. Re-enabling restores contributions on the
-    // next session start (the plugin's own compose hook re-merges).
-    const strippedPlugins = stripDisabledPluginContributions(disabling, snapshots);
-    writePluginSelection(projectDir, names);
-    regenerateSelectionSurfaces(projectDir);
-    appendAuditEvent(projectDir, "PLUGIN_SELECTION_CHANGED", {
-      "Previous Selection": previousSelection,
-      "New Selection": newSelection,
-    });
-    if (strippedPlugins.length > 0) {
-      process.stdout.write(
-        `Stripped merged contributions of disabled plugin(s): ${strippedPlugins.join(", ")} (re-enabling restores them on the next session start)\n`,
+  // A plugin compose holds the workspace lock across compile + runner
+  // regeneration (can exceed the default ~5s acquire budget on a loaded
+  // machine), and select-plugins legitimately queues behind it - so wait up
+  // to ~60s. Dead holders are reaped immediately regardless of budget.
+  withAuditLock(projectDir, () => {
+    // Compose can install a plugin while this command waits for the lock, so
+    // discover and validate identities only after entering the transaction.
+    const known = knownPluginNames();
+    const knownSet = new Set(known);
+    const unknown = names.filter((name) => !knownSet.has(name));
+    if (unknown.length > 0) {
+      die(`Unknown plugin name(s): ${unknown.join(", ")}. Valid plugins: ${known.join(", ")}.`);
+    }
+    const violations = activeWorkflowDependencyViolations(projectDir, new Set(names));
+    if (violations.length > 0) {
+      die(
+        `select-plugins refused: the new selection would strand ${violations.length} active workflow dependency(ies):\n` +
+          violations.map((v) => `  - ${v}`).join("\n") +
+          `\nComplete or park the workflow(s) first (or keep the plugin enabled), then re-run select-plugins.`,
       );
     }
-    process.stdout.write(`Enabled plugins: ${names.join(", ")}\n`);
-  } catch (err) {
-    const original = errorMessage(err);
-    let recoveryMessage = "";
+
+    const previousSelection = renderPluginSelection(pluginsEnabled());
+    const newSelection = names.join(", ");
+    const nameSet = new Set(names);
+    // Plugins this change DISABLES (known but not selected; the implicit core
+    // plugin has no composed contributions to strip).
+    const disabling = known.filter((n) => n !== "aidlc" && !nameSet.has(n));
+
+    const snapshots = [
+      snapshotFile(mutableHarnessDataPath(projectDir)),
+      snapshotFile(stageGraphDataPath(projectDir)),
+      snapshotFile(scopeGridDataPath(projectDir)),
+    ];
+
     try {
-      for (const snapshot of snapshots) restoreSnapshot(snapshot);
-      resetSelectionSensitiveCaches();
+      // Strip disabled plugins' merged contributions BEFORE recompiling, so the
+      // regenerated graph no longer carries their produces/sensors/consumes/
+      // scopes on core stages. Mutated stage files join `snapshots`, so the catch-side
+      // rollback restores them too. Re-enabling restores contributions on the
+      // next session start (the plugin's own compose hook re-merges).
+      const strippedPlugins = stripDisabledPluginContributions(disabling, snapshots);
+      writePluginSelection(projectDir, names);
       regenerateSelectionSurfaces(projectDir);
-      recoveryMessage =
-        " Restored harness.json, stage-graph.json, scope-grid.json, and any stripped stage files, then re-ran the regeneration chain against the restored selection.";
-    } catch (recoveryErr) {
-      recoveryMessage =
-        ` Restore was attempted, but regeneration against the restored selection also failed: ${errorMessage(recoveryErr)}.`;
+      appendAuditEvent(projectDir, "PLUGIN_SELECTION_CHANGED", {
+        "Previous Selection": previousSelection,
+        "New Selection": newSelection,
+      });
+      if (strippedPlugins.length > 0) {
+        process.stdout.write(
+          `Stripped merged contributions of disabled plugin(s): ${strippedPlugins.join(", ")} (re-enabling restores them on the next session start)\n`,
+        );
+      }
+      process.stdout.write(`Enabled plugins: ${names.join(", ")}\n`);
+    } catch (err) {
+      const original = errorMessage(err);
+      let recoveryMessage = "";
+      try {
+        for (const snapshot of snapshots) restoreSnapshot(snapshot);
+        resetSelectionSensitiveCaches();
+        regenerateSelectionSurfaces(projectDir);
+        recoveryMessage =
+          " Restored harness.json, stage-graph.json, scope-grid.json, and any stripped stage files, then re-ran the regeneration chain against the restored selection.";
+      } catch (recoveryErr) {
+        recoveryMessage =
+          ` Restore was attempted, but regeneration against the restored selection also failed: ${errorMessage(recoveryErr)}.`;
+      }
+      die(`select-plugins failed: ${original}.${recoveryMessage}`);
     }
-    die(`select-plugins failed: ${original}.${recoveryMessage}`);
-  }
+  }, undefined, undefined, WORKSPACE_MUTATION_LOCK_RETRIES);
 }
 
 function pluginListRows(): Array<{ name: string; enabled: boolean }> {
@@ -2759,6 +2793,16 @@ function handleDoctor(projectDir: string, flags: Record<string, string> = {}): v
     // Advisory only; a scan failure must not hide the main doctor report.
   }
 
+  // Workspace-manifest rows (W1: uncommitted records; W2: repos.json vs disk
+  // drift; W3: stale managed .gitignore block). All advisory (pass:true) so
+  // they never change the exit code; W2/W3 only emit when a repos.json manifest
+  // exists, avoiding manifest-specific rows on a single-repo install.
+  try {
+    for (const row of workspaceManifestChecks(projectDir)) results.push(row);
+  } catch {
+    // Advisory only; a scan failure must not hide the main doctor report.
+  }
+
   // Cold-safe gate: only emit audit when an audit trail already exists. On a
   // pristine project (no audit shard / flat audit.md) doctor prints its health
   // report and creates NOTHING — it stays a pure read-only diagnostic. On an
@@ -3671,7 +3715,7 @@ function handleIntentCreate(projectDir: string, flags: Record<string, string>): 
     });
 
     handleIntentCreateStateBuild(projectDir, flags, scope, ts);
-  });
+  }, undefined, undefined, WORKSPACE_MUTATION_LOCK_RETRIES);
 }
 
 // The scope→stage state-build half of birth: the workspace detection + state
@@ -4205,6 +4249,171 @@ function handleCodekbPath(projectDir: string, flags: Record<string, string>): vo
     return;
   }
   process.stdout.write(`${dir}/\n`);
+}
+
+// `aidlc-utility.ts codekb-scope-diff [--repo <name>] [--compare <timestamp.md>]
+// [--json]` - read-only. The deterministic half of the reverse-engineering
+// rerun guard (the store is shared space-level knowledge; a narrower rerun
+// overwrites it last-writer-wins, so the human decides on evidence).
+//
+// Status mode (default): parse the STORE's reverse-engineering-timestamp.md
+// scope block and recompute the content fingerprint over its analyzed paths.
+//   NO_STORE       no store timestamp - first scan, nothing to guard
+//   CURRENT        fingerprint matches - the store's deep knowledge is exact
+//   STALE          analyzed paths changed since the store was built
+//   UNVERIFIED     scope parsed but no/uncomputable fingerprint (non-git)
+//   UNKNOWN_SCOPE  block absent (legacy store) or malformed
+//
+// Compare mode (--compare <incoming timestamp.md>): does the incoming run's
+// analyzed scope cover the store's? COVERS, or NARROWER + the exact paths and
+// components an overwrite would discard.
+//
+// Mint mode (--mint --paths <a,b,...>): print the content fingerprint over
+// the given repo-relative paths - the value the architect writes into the
+// scope block's `fingerprint:` line at synthesis time. Prints `unknown` when
+// not computable (non-git or invalid pathspec), which the block records
+// verbatim.
+//
+// Always exits 0 with the verdict in the output (read-only query - mirrors
+// codekb-path; refusals are for lifecycle verbs). No mkdir, no state write,
+// no audit.
+function handleCodekbScopeDiff(projectDir: string, flags: Record<string, string>): void {
+  const asJson = flags.json === "true";
+  const space = activeSpace(projectDir);
+  const repo = flags.repo && flags.repo.length > 0 ? flags.repo : codekbRepoName(projectDir, space);
+  const storeDir = relativeCodekbDir(projectDir, repo, space);
+  const storePath = join(projectDir, ...storeDir.split("/"), "reverse-engineering-timestamp.md");
+
+  // The repo's source root: the sibling dir `<workspace>/<repo>/` when it
+  // exists (the multi-repo layout reverse-engineering.md Step 1 scans), else
+  // the workspace root itself (the lone-repo case, where codekbRepoName is
+  // basename(projectDir)).
+  const siblingDir = join(projectDir, repo);
+  const repoDir = existsSync(siblingDir) && statSync(siblingDir).isDirectory() ? siblingDir : projectDir;
+  // In the lone-repo layout the framework-owned aidlc workspace tree lives
+  // under the repository root. Exclude it from full-root fingerprints so
+  // writing the scope draft, codekb, audit, or state cannot stale its own hash.
+  const fingerprintExcludes = repoDir === projectDir ? ["aidlc"] : [];
+
+  if (flags.mint === "true") {
+    const paths = (flags.paths ?? "")
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p !== "");
+    if (paths.length === 0) {
+      die("codekb-scope-diff --mint: pass --paths <comma-separated repo-relative paths>");
+    }
+    const fp = codekbScopeFingerprint(repoDir, paths, fingerprintExcludes) ?? "unknown";
+    if (asJson) process.stdout.write(`${JSON.stringify({ repo, fingerprint: fp, paths })}\n`);
+    else process.stdout.write(`${fp}\n`);
+    return;
+  }
+
+  const emit = (payload: Record<string, unknown>, human: string): void => {
+    if (asJson) process.stdout.write(`${JSON.stringify({ repo, store: `${storeDir}/`, ...payload })}\n`);
+    else process.stdout.write(`${human}\n`);
+  };
+
+  if (!existsSync(storePath)) {
+    emit(
+      { verdict: "NO_STORE" },
+      `NO_STORE: no reverse-engineering-timestamp.md at ${storeDir}/ - first scan, nothing to compare.`,
+    );
+    return;
+  }
+  const parsed = parseReScope(readFileSync(storePath, "utf-8"));
+  if (!parsed.ok) {
+    emit(
+      { verdict: "UNKNOWN_SCOPE", reason: parsed.reason, detail: parsed.detail },
+      `UNKNOWN_SCOPE (${parsed.reason}): ${parsed.detail}. The store predates scope tracking - a rerun replaces it without a coverage comparison.`,
+    );
+    return;
+  }
+  const store = parsed.scope;
+
+  if (flags.compare !== undefined) {
+    const incomingPath = flags.compare;
+    if (!incomingPath || !existsSync(incomingPath)) {
+      die(`codekb-scope-diff --compare: file not found: ${incomingPath || "(missing path)"}`);
+    }
+    const incomingParsed = parseReScope(readFileSync(incomingPath, "utf-8"));
+    if (!incomingParsed.ok) {
+      emit(
+        { verdict: "UNKNOWN_SCOPE", reason: incomingParsed.reason, detail: `incoming: ${incomingParsed.detail}` },
+        `UNKNOWN_SCOPE (incoming ${incomingParsed.reason}): ${incomingParsed.detail}.`,
+      );
+      return;
+    }
+    const incoming = incomingParsed.scope;
+    const fullScopeDowngrade = store.kind === "full" && incoming.kind !== "full";
+    const discardedPaths =
+      incoming.kind === "full"
+        ? []
+        : fullScopeDowngrade
+          ? [...store.analyzedPaths]
+          : store.analyzedPaths.filter((p) => !scopePathCovered(incoming.analyzedPaths, p));
+    const discardedComponents =
+      incoming.kind === "full"
+        ? []
+        : store.analyzedComponents.filter((c) => !incoming.analyzedComponents.includes(c));
+    const narrower = discardedPaths.length > 0 || discardedComponents.length > 0;
+    const payload = {
+      verdict: narrower ? "NARROWER" : "COVERS",
+      store_intent: store.intent,
+      incoming_intent: incoming.intent,
+      discarded_paths: discardedPaths,
+      discarded_components: discardedComponents,
+    };
+    if (narrower) {
+      emit(
+        payload,
+        `NARROWER: replacing the store discards deep knowledge of:\n` +
+          discardedPaths.map((p) => `  - ${p}`).join("\n") +
+          (discardedComponents.length > 0
+            ? `\n  components: ${discardedComponents.join(", ")}`
+            : "") +
+          `\n(store intent: ${store.intent || "unrecorded"}; incoming intent: ${incoming.intent || "unrecorded"})`,
+      );
+    } else {
+      emit(payload, `COVERS: the incoming scan covers everything the store analyzed.`);
+    }
+    return;
+  }
+
+  // Status mode.
+  const currentFingerprint =
+    store.analyzedPaths.length > 0
+      ? codekbScopeFingerprint(repoDir, store.analyzedPaths, fingerprintExcludes)
+      : null;
+  const scopeLines = store.analyzedPaths.map((p) => `  - ${p}`).join("\n");
+  if (store.fingerprint === null || currentFingerprint === null) {
+    emit(
+      {
+        verdict: "UNVERIFIED",
+        store_intent: store.intent,
+        kind: store.kind,
+        analyzed_paths: store.analyzedPaths,
+        detail: store.fingerprint === null ? "store has no fingerprint" : "fingerprint not computable here",
+      },
+      `UNVERIFIED: the store (intent: ${store.intent || "unrecorded"}) analyzed:\n${scopeLines}\n` +
+        `but ${store.fingerprint === null ? "recorded no fingerprint" : "the current tree's fingerprint cannot be computed"} - freshness unknown.`,
+    );
+    return;
+  }
+  const current = store.fingerprint === currentFingerprint;
+  emit(
+    {
+      verdict: current ? "CURRENT" : "STALE",
+      store_intent: store.intent,
+      kind: store.kind,
+      analyzed_paths: store.analyzedPaths,
+      store_fingerprint: store.fingerprint,
+      current_fingerprint: currentFingerprint,
+    },
+    current
+      ? `CURRENT: the analyzed paths are unchanged since the store was built (intent: ${store.intent || "unrecorded"}, coverage: ${store.kind}):\n${scopeLines}`
+      : `STALE: the analyzed paths have changed since the store was built (intent: ${store.intent || "unrecorded"}):\n${scopeLines}`,
+  );
 }
 
 // `detect [--json]` - read-only. Runs the workspace scan (detectWorkspace) on
@@ -4793,7 +5002,7 @@ function handleRecompose(projectDir: string, flags: Record<string, string>): voi
         `Stages in scope: ${executeStages.length}\n` +
         `Completed: ${completedCount}/${executeStages.length}\n`,
     );
-  });
+  }, undefined, undefined, WORKSPACE_MUTATION_LOCK_RETRIES);
 }
 
 // ---------------------------------------------------------------------------
@@ -5407,6 +5616,12 @@ export async function main(argv: string[]): Promise<void> {
     case "codekb-path":
       handleCodekbPath(projectDir, flags);
       break;
+    // codekb-scope-diff - read-only query verb. Compares the codekb store's
+    // recorded scope of analysis against the live tree (status) or an
+    // incoming run's timestamp (--compare). The RE stage's rerun guard.
+    case "codekb-scope-diff":
+      handleCodekbScopeDiff(projectDir, flags);
+      break;
     // detect - read-only query verb. Prints the workspace scan
     // (greenfield/brownfield, languages) + the resolved scope-registry paths so
     // the composer agent is told where scope data lives. No mutation, no audit.
@@ -5479,7 +5694,7 @@ export async function main(argv: string[]): Promise<void> {
       die(
         `Unknown command "${subcommand}". Run \`aidlc-utility help\` for what this tool can do.\n\n` +
           "Available commands: help, version, status, doctor, intent-create, intent, space, " +
-          "space-create, codekb-path, detect, select-plugins, plugin-list, plugin-sync, " +
+          "space-create, codekb-path, codekb-scope-diff, detect, select-plugins, plugin-list, plugin-sync, " +
           "recompose, scope-change, config-change, config-get, config-list, set-status, " +
           "detect-scope, resolve-env-scope, scope-table, stage-table, upgrade\n" +
           "Common options: [--project-dir <path>] [--scope <scope>] [--json]"

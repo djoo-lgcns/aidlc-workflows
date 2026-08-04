@@ -21,23 +21,26 @@
 //
 // Compile is the YAML -> JSON transform. It bootstraps number + name
 // from today's stage-graph.json so YAML stays the authored source of
-// truth for everything else while computed fields stay computed. number
-// and name are NOT authorable frontmatter keys (the stage schema rejects
-// them as unknown), they are derived, then pinned in the JSON so they
-// stay byte-stable across recompiles.
+// truth for everything else while computed fields stay computed. Numbers
+// are ALWAYS assigned by the engine, never claimed by authors — a plugin's
+// authored `number:` is a relative-ordering hint among its own new stages,
+// its absolute value never used, so uncoordinated plugins cannot collide.
 //
 // A NEW stage slug (a .md on disk with no row in stage-graph.json yet) is
-// auto-seeded on compile rather than rejected: its number is the next free
-// index in its phase (`<PHASES.indexOf(phase)>.<maxIndexInPhase + 1>`) and
-// its name defaults to the title-cased slug. Both are written into the
-// regenerated JSON, so the FIRST compile assigns them and every subsequent
-// compile harvests the pinned values, the assignment happens once and is
-// stable thereafter. An author who wants a hand-tuned display name (e.g.
-// "NFR Requirements", "CI Pipeline") edits that one JSON field after the
-// seeding compile; the next compile preserves it. Renumbering an existing
-// stage is still an explicit JSON edit. (Auto-seed only ever ADDS rows and
-// fills the next free per-phase index, it never renumbers a stage that
-// already has a row, so an in-flight workflow's slug-keyed state is safe.)
+// seeded on compile rather than rejected: each phase's batch of new
+// stages is ordered by its own requires_stage edges (Kahn's algorithm;
+// ties among independent stages break by the authored `number:` hint,
+// then slug), then assigned next-free contiguous indices
+// (`<PHASES.indexOf(phase)>.<maxIndexInPhase + 1>` onward); name comes
+// from authored `name:`, defaulting to the title-cased slug. Both are
+// written into the regenerated JSON, so the FIRST compile assigns them
+// and every subsequent compile harvests the pinned values, the assignment
+// happens once and is stable thereafter. An author who wants a hand-tuned
+// display name edits that one JSON field after the seeding compile; the
+// next compile preserves it. Renumbering an existing stage is still an
+// explicit JSON edit. (Seeding only ever ADDS rows, it never renumbers a
+// stage that already has a row, so an in-flight workflow's slug-keyed
+// state is safe.)
 //
 // See docs/reference/16-artifact-vocabulary.md for artifact naming.
 
@@ -55,6 +58,7 @@ import {
   _resetScopeMappingForTests,
   _resetStageGraphForTests,
   activeSpace,
+  auditLockOwnedByProcess,
   type AgentMetadata,
   errorMessage,
   gridCostSummary,
@@ -1590,8 +1594,11 @@ export function compileStageGraph(): {
       Math.max(maxIndexByPhasePrefix.get(prefix) ?? 0, index)
     );
   }
-
   const stages: GraphStage[] = [];
+  // NEW slugs (no pinned row yet), grouped by phase prefix for the
+  // topological number seed after the walk.
+  type NewStageSeed = { data: StageFrontmatter; phase: string; prefix: number; name: string };
+  const newByPrefix = new Map<number, NewStageSeed[]>();
   // Track slug-to-first-file so duplicate-slug errors name both files.
   const slugToFile = new Map<string, string>();
 
@@ -1676,28 +1683,98 @@ export function compileStageGraph(): {
       }
       slugToFile.set(slug, filePath);
 
-      // Existing slug -> keep its pinned number + name. New slug -> auto-seed
-      // both: number = next free index in this phase, name = title-cased slug.
-      let number = numberBySlug.get(slug);
-      let name = nameBySlug.get(slug);
-      if (!number || !name) {
-        const prefix = PHASES.indexOf(phase as Phase);
-        if (prefix < 0) {
-          // A stage directory whose name is not one of the five canonical
-          // phases can't be placed on the numeric spine, fail loud rather
-          // than invent a prefix.
-          throw new Error(
-            `Stage "${slug}" (${filePath}) is in an unknown phase directory ` +
-              `"${phase}". Stage phase directories must be one of: ${PHASES.join(", ")}.`
-          );
-        }
-        const nextIndex = (maxIndexByPhasePrefix.get(prefix) ?? 0) + 1;
-        maxIndexByPhasePrefix.set(prefix, nextIndex);
-        number = number ?? `${prefix}.${nextIndex}`;
-        name = name ?? titleCaseSlug(slug);
+      // Existing slug -> keep its pinned number + name (the "computed once,
+      // stable thereafter" contract; a pinned row missing only its name
+      // seeds the name inline). New slug -> DEFER numbering to the per-phase
+      // topological seed after the file walk (below): with several new
+      // stages arriving in one compile (a multi-stage plugin), numbering
+      // them in file-walk (alphabetical) order can contradict their own
+      // requires_stage edges and fail the lower-numbered-dependency
+      // invariant, so the batch is ordered by its edges first.
+      const prefix = PHASES.indexOf(phase as Phase);
+      if (prefix < 0) {
+        // A stage directory whose name is not one of the five canonical
+        // phases can't be placed on the numeric spine, fail loud rather
+        // than invent a prefix.
+        throw new Error(
+          `Stage "${slug}" (${filePath}) is in an unknown phase directory ` +
+            `"${phase}". Stage phase directories must be one of: ${PHASES.join(", ")}.`
+        );
       }
+      const number = numberBySlug.get(slug);
+      const name =
+        nameBySlug.get(slug) ?? validation.data.name ?? titleCaseSlug(slug);
+      if (number) {
+        stages.push(buildGraphStage(validation.data, phase, number, name));
+      } else {
+        newByPrefix.get(prefix)?.push({ data: validation.data, phase, prefix, name }) ??
+          newByPrefix.set(prefix, [{ data: validation.data, phase, prefix, name }]);
+      }
+    }
+  }
 
-      stages.push(buildGraphStage(validation.data, phase, number, name));
+  // Per-phase topological seed for NEW slugs. Numbers are assigned by the
+  // ENGINE, never claimed by authors: within one phase's batch of new
+  // stages, order by the batch's own requires_stage edges (Kahn), breaking
+  // ties among independent stages by the authored `number:` hint (a
+  // relative-ordering hint only — its absolute value is never used) and
+  // then slug; assign next-free contiguous indices in that order. Edges to
+  // stages OUTSIDE the batch need no handling here: an already-pinned
+  // same-phase dependency is lower-numbered by construction (new indices
+  // start past the phase max), and cross-phase edges are ordered by the
+  // phase prefix — the edge-local invariant below still backstops all of
+  // it. Uncoordinated plugins therefore cannot collide on numbers, and a
+  // batch whose file order contradicts its flow order still seeds validly.
+  for (const prefix of [...newByPrefix.keys()].sort((a, b) => a - b)) {
+    const batch = newByPrefix.get(prefix)!;
+    const inBatch = new Map(batch.map((e) => [e.data.slug, e]));
+    // Dedupe each stage's edges: the decrement below fires once per
+    // dependent, so a duplicated requires_stage entry would strand the
+    // stage at indegree > 0 and misreport a copy-paste duplicate as a
+    // cycle (the schema shape-checks the list but does not dedupe it).
+    const indegree = new Map(batch.map((e) => [e.data.slug, 0]));
+    for (const e of batch) {
+      for (const dep of new Set(e.data.requires_stage ?? [])) {
+        if (inBatch.has(dep)) indegree.set(e.data.slug, (indegree.get(e.data.slug) ?? 0) + 1);
+      }
+    }
+    const hint = (e: NewStageSeed): number => {
+      const authored = e.data.number;
+      if (!authored) return Number.POSITIVE_INFINITY;
+      const idx = parseInt(authored.split(".")[1], 10);
+      return Number.isFinite(idx) ? idx : Number.POSITIVE_INFINITY;
+    };
+    const byHintThenSlug = (a: NewStageSeed, b: NewStageSeed): number =>
+      hint(a) - hint(b) || a.data.slug.localeCompare(b.data.slug);
+    const ready = batch.filter((e) => indegree.get(e.data.slug) === 0).sort(byHintThenSlug);
+    const seeded: NewStageSeed[] = [];
+    while (ready.length > 0) {
+      const e = ready.shift()!;
+      seeded.push(e);
+      for (const other of batch) {
+        if (!(other.data.requires_stage ?? []).includes(e.data.slug)) continue;
+        const d = (indegree.get(other.data.slug) ?? 0) - 1;
+        indegree.set(other.data.slug, d);
+        if (d === 0) {
+          ready.push(other);
+          ready.sort(byHintThenSlug);
+        }
+      }
+    }
+    if (seeded.length < batch.length) {
+      // The unseeded set = the cycle's members plus anything downstream of
+      // them, so name it "stuck", not "the cycle" — a stage can appear here
+      // solely because its dependency is cyclic.
+      const stuck = batch.filter((e) => !seeded.includes(e)).map((e) => e.data.slug);
+      throw new Error(
+        `Cannot seed stage numbers for phase "${batch[0].phase}": ` +
+          `requires_stage cycle among new stages (stuck: ${stuck.join(", ")}). Break the cycle.`
+      );
+    }
+    for (const e of seeded) {
+      const nextIndex = (maxIndexByPhasePrefix.get(prefix) ?? 0) + 1;
+      maxIndexByPhasePrefix.set(prefix, nextIndex);
+      stages.push(buildGraphStage(e.data, e.phase, `${prefix}.${nextIndex}`, e.name));
     }
   }
 
@@ -1824,7 +1901,10 @@ function buildGraphStage(
   // (parseStageFrontmatter normalises empty).
   const support_agents = parsed.support_agents ?? [];
   const produces = parsed.produces ?? [];
-  const requires_stage = parsed.requires_stage ?? [];
+  // Dependency edges are set-valued. Normalize copy-paste duplicates here so
+  // every graph consumer, including topoSort's indegree accounting, observes
+  // the same edge cardinality as the compile-time number seeder.
+  const requires_stage = [...new Set(parsed.requires_stage ?? [])];
   const consumesRaw = parsed.consumes ?? [];
   const consumes: Consume[] = consumesRaw.map((c) => {
     const out: Consume = {
@@ -2565,11 +2645,26 @@ const COMMANDS: Record<string, Handler> = {
     // written under the one lock so they never diverge.
     const pd = resolveProjectDir();
     requireInstalledHarness(pd);
-    withAuditLock(pd, () => {
+    const writeCompiledGraph = (): void => {
       const { json, gridJson } = compileStageGraph();
       writeFileAtomic(mutableStageGraphPath(pd), json);
       writeFileAtomic(mutableScopeGridPath(pd), gridJson);
-    });
+    };
+    const inheritedOwnerRaw = process.env.AIDLC_WORKSPACE_LOCK_OWNER_PID;
+    if (inheritedOwnerRaw !== undefined) {
+      const inheritedOwner = Number(inheritedOwnerRaw);
+      if (
+        inheritedOwner !== process.ppid ||
+        !auditLockOwnedByProcess(pd, inheritedOwner)
+      ) {
+        throw new Error(
+          "Refusing inherited workspace lock: the declared owner is not this process's live parent lock holder."
+        );
+      }
+      writeCompiledGraph();
+    } else {
+      withAuditLock(pd, writeCompiledGraph);
+    }
   },
   resolve: (args) => {
     // resolve <scope> — emit the active scope's plan (.aidlc-plan.json) to

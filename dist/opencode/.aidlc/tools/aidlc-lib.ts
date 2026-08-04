@@ -1,5 +1,6 @@
+import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { accessSync, appendFileSync, constants as fsConstants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { accessSync, appendFileSync, constants as fsConstants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve as resolvePath, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1134,6 +1135,208 @@ export function relativeCodekbDir(projectDir: string, repo: string, space?: stri
 export function codekbRepoName(projectDir: string, space?: string): string {
   const repos = intentRepos(projectDir, undefined, space);
   return repos.length === 1 ? repos[0] : basename(projectDir);
+}
+
+// --- Codekb scope of analysis -------------------------------------------------
+//
+// The reverse-engineering stage records WHAT its scan covered in a fenced yaml
+// block inside reverse-engineering-timestamp.md (the store's freshness marker).
+// The parser + fingerprint here are the deterministic half of the rerun
+// guard: `codekb-scope-diff` compares a store's recorded scope against the
+// live working tree (status) or an incoming run's scope (compare), so the
+// human at the RE gate decides reuse/rescan/replace on evidence instead of
+// silently losing a prior intent's knowledge to a narrower overwrite.
+//
+// Block shape (scope_version 1 - authored by the architect at synthesis,
+// behind the RE approval gate):
+//
+//   ```yaml
+//   scope_version: 1
+//   kind: partial            # or: full
+//   intent: fix-payment-timeout
+//   fingerprint: 3f2a9c...   # codekbScopeFingerprint over analyzed.paths
+//   analyzed:
+//     paths:
+//       - src/payments/
+//     components:
+//       - payment-gateway
+//   shallow:
+//     paths:
+//       - src/
+//   ```
+//
+// Pure data - no model call. Same idiom as parseBoltDag: a constrained
+// line-walker, no YAML dependency.
+
+export type ReScope = {
+  kind: "full" | "partial";
+  intent: string;
+  fingerprint: string | null;
+  analyzedPaths: string[];
+  analyzedComponents: string[];
+  shallowPaths: string[];
+};
+
+export type ReScopeParse =
+  | { ok: true; scope: ReScope }
+  | { ok: false; reason: "absent" | "malformed"; detail: string };
+
+// Find the fenced yaml block carrying `scope_version:` anywhere in the body
+// (keyed on the version line, not a heading, so prose edits around the block
+// don't break parsing). Returns the inner lines, or null when no block exists.
+function extractScopeBlock(body: string): string | null {
+  const lines = body.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    if (/^```ya?ml\s*$/.test(lines[i].trim())) {
+      const inner: string[] = [];
+      let j = i + 1;
+      for (; j < lines.length; j++) {
+        if (/^```\s*$/.test(lines[j].trim())) break;
+        inner.push(lines[j]);
+      }
+      const block = inner.join("\n");
+      if (/^\s*scope_version\s*:/m.test(block)) return block;
+      i = j; // not the scope block - resume past its close fence
+    }
+  }
+  return null;
+}
+
+// Parse the scope block out of a reverse-engineering-timestamp.md body.
+// Unknown scope_version parses as malformed (a future writer must not be
+// half-read by an old reader); a missing block is "absent" (legacy store).
+export function parseReScope(body: string): ReScopeParse {
+  const block = extractScopeBlock(body);
+  if (block === null) {
+    return { ok: false, reason: "absent", detail: "no fenced yaml scope_version block found" };
+  }
+  const scope: ReScope = {
+    kind: "partial",
+    intent: "",
+    fingerprint: null,
+    analyzedPaths: [],
+    analyzedComponents: [],
+    shallowPaths: [],
+  };
+  let section: "analyzed" | "shallow" | null = null;
+  let list: "paths" | "components" | null = null;
+  let sawKind = false;
+  for (const raw of block.split("\n")) {
+    const t = raw.trim();
+    if (t === "" || t.startsWith("#")) continue;
+    const indent = raw.length - raw.trimStart().length;
+    if (indent === 0) {
+      section = null;
+      list = null;
+      if (t.startsWith("scope_version:")) {
+        const v = t.slice("scope_version:".length).trim();
+        if (v !== "1") {
+          return { ok: false, reason: "malformed", detail: `unknown scope_version: ${v}` };
+        }
+      } else if (t.startsWith("kind:")) {
+        const k = t.slice("kind:".length).trim();
+        if (k !== "full" && k !== "partial") {
+          return { ok: false, reason: "malformed", detail: `kind must be full|partial, got: ${k}` };
+        }
+        scope.kind = k;
+        sawKind = true;
+      } else if (t.startsWith("intent:")) {
+        scope.intent = t.slice("intent:".length).trim();
+      } else if (t.startsWith("fingerprint:")) {
+        const f = t.slice("fingerprint:".length).trim();
+        scope.fingerprint = f === "" || f === "unknown" ? null : f;
+      } else if (t === "analyzed:") {
+        section = "analyzed";
+      } else if (t === "shallow:") {
+        section = "shallow";
+      }
+    } else if (section !== null && !t.startsWith("-") && t.endsWith(":")) {
+      list = t === "paths:" ? "paths" : t === "components:" ? "components" : null;
+    } else if (section !== null && list !== null && t.startsWith("-")) {
+      const item = t.slice(1).trim();
+      if (item === "") continue;
+      if (section === "analyzed" && list === "paths") scope.analyzedPaths.push(item);
+      else if (section === "analyzed" && list === "components") scope.analyzedComponents.push(item);
+      else if (section === "shallow" && list === "paths") scope.shallowPaths.push(item);
+    }
+  }
+  if (!sawKind) {
+    return { ok: false, reason: "malformed", detail: "missing kind: line" };
+  }
+  if (scope.kind === "partial" && scope.analyzedPaths.length === 0) {
+    return { ok: false, reason: "malformed", detail: "kind: partial requires analyzed.paths entries" };
+  }
+  if (scope.kind === "partial" && scope.analyzedPaths.includes("./")) {
+    return {
+      ok: false,
+      reason: "malformed",
+      detail: "repository-root coverage (./) requires kind: full",
+    };
+  }
+  if (scope.kind === "full" && !scope.analyzedPaths.includes("./")) {
+    return {
+      ok: false,
+      reason: "malformed",
+      detail: "kind: full requires repository-root coverage (analyzed.paths must include ./)",
+    };
+  }
+  return { ok: true, scope };
+}
+
+// Content fingerprint of the WORKING TREE restricted to the scope's analyzed
+// paths: `git write-tree` over a temporary index populated by `git add -A --
+// <paths>`. Hashes what is actually on disk (uncommitted edits included), so
+// rebases/squashes/amends that vaporise a recorded commit hash cannot break
+// the comparison, and reverting an edit restores the original fingerprint.
+// Ignored files stay excluded (git add semantics). Callers may exclude generated
+// paths that live inside an analyzed root, such as the codekb being fingerprinted.
+// Returns null when repoDir is not a git work tree, git is unavailable, or any
+// pathspec is invalid/unmatched (callers report UNVERIFIED, never a false verdict).
+export function codekbScopeFingerprint(
+  repoDir: string,
+  paths: string[],
+  excludedPaths: string[] = [],
+): string | null {
+  if (paths.length === 0) return null;
+  const inTree = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
+    cwd: repoDir,
+    encoding: "utf-8",
+  });
+  if (inTree.status !== 0 || inTree.stdout.trim() !== "true") return null;
+  const indexFile = join(tmpdir(), `.aidlc-scope-index-${randomUUID()}`);
+  const env = { ...process.env, GIT_INDEX_FILE: indexFile };
+  try {
+    const exclusions = excludedPaths
+      .map((p) => p.replaceAll("\\", "/").replace(/^\.?\//, "").replace(/\/+$/, ""))
+      .filter((p) => p !== "")
+      .map((p) => `:(exclude,literal)${p}`);
+    const add = spawnSync("git", ["add", "-A", "--", ...paths, ...exclusions], {
+      cwd: repoDir,
+      env,
+      encoding: "utf-8",
+    });
+    if (add.status !== 0) return null;
+    const wt = spawnSync("git", ["write-tree"], { cwd: repoDir, env, encoding: "utf-8" });
+    if (wt.status !== 0) return null;
+    const hash = wt.stdout.trim();
+    return /^[0-9a-f]{40,64}$/.test(hash) ? hash : null;
+  } finally {
+    try {
+      unlinkSync(indexFile);
+    } catch {
+      // best-effort cleanup - a leaked temp index is inert
+    }
+  }
+}
+
+// Coverage test for the compare mode: does the incoming run's analyzed set
+// cover a store entry? Literal match, or an incoming DIRECTORY prefix (entry
+// ending "/") subsuming the store path. Deliberately prefix-only - scope
+// paths are authored as repo-relative dirs/files, not globs.
+export function scopePathCovered(incoming: string[], storePath: string): boolean {
+  return incoming.some(
+    (p) => p === storePath || (p.endsWith("/") && storePath.startsWith(p)),
+  );
 }
 
 // The bare SPACE record root: `aidlc/spaces/<space>/intents/`. The absolute path
@@ -2967,11 +3170,18 @@ function lockStaleMs(): number {
 // given, the space is default-resolved (a per-intent lock is meaningless without
 // its space) but activeIntent() is NEVER consulted here.
 export function auditLockIdentity(projectDir: string, intent?: string, space?: string): string {
+  let canonicalProjectDir = resolvePath(projectDir);
+  try {
+    canonicalProjectDir = realpathSync(canonicalProjectDir);
+  } catch {
+    // Birth and diagnostics can lock before the project exists. The absolute
+    // lexical path is stable until realpath can resolve filesystem aliases.
+  }
   if (intent === undefined) {
-    return `${projectDir}\x00${WORKSPACE_LOCK_SENTINEL}`;
+    return `${canonicalProjectDir}\x00${WORKSPACE_LOCK_SENTINEL}`;
   }
   const sp = space ?? activeSpace(projectDir);
-  return `${projectDir}\x00${sp}\x00${intent}`;
+  return `${canonicalProjectDir}\x00${sp}\x00${intent}`;
 }
 
 export function auditLockDir(projectDir: string, intent?: string, space?: string): string {
@@ -2987,14 +3197,22 @@ export function auditLockDir(projectDir: string, intent?: string, space?: string
 interface LockOwner {
   pid: number;
   startedAtMs: number;
+  reapLiveOwnerAfterStale: boolean;
 }
 
 function ownerStampPath(lockDir: string): string {
   return join(lockDir, "owner.json");
 }
 
-function writeOwnerStamp(lockDir: string): void {
-  const owner: LockOwner = { pid: process.pid, startedAtMs: lockAcquireEpochMs() };
+function writeOwnerStamp(
+  lockDir: string,
+  reapLiveOwnerAfterStale = true,
+): void {
+  const owner: LockOwner = {
+    pid: process.pid,
+    startedAtMs: lockAcquireEpochMs(),
+    reapLiveOwnerAfterStale,
+  };
   try {
     writeFileSync(ownerStampPath(lockDir), JSON.stringify(owner), "utf-8");
   } catch {
@@ -3008,7 +3226,12 @@ function readOwnerStamp(lockDir: string): LockOwner | null {
     const raw = readFileSync(ownerStampPath(lockDir), "utf-8");
     const parsed: unknown = JSON.parse(raw);
     if (isPlainObject(parsed) && typeof parsed.pid === "number" && typeof parsed.startedAtMs === "number") {
-      return { pid: parsed.pid, startedAtMs: parsed.startedAtMs };
+      return {
+        pid: parsed.pid,
+        startedAtMs: parsed.startedAtMs,
+        // Older stamps have no field and retain the historical over-age reaping.
+        reapLiveOwnerAfterStale: parsed.reapLiveOwnerAfterStale !== false,
+      };
     }
   } catch {
     // no stamp / unreadable
@@ -3104,7 +3327,11 @@ function stampMatches(dir: string, judged: LockOwner | null): boolean {
     return lockAcquireEpochMs() - mtime > unstampedGraceMs();
   }
   if (now === null) return false;
-  return now.pid === judged.pid && now.startedAtMs === judged.startedAtMs;
+  return (
+    now.pid === judged.pid &&
+    now.startedAtMs === judged.startedAtMs &&
+    now.reapLiveOwnerAfterStale === judged.reapLiveOwnerAfterStale
+  );
 }
 
 // Reclaim a lock iff it is provably dead (owner gone) OR stale (over-age). A
@@ -3163,6 +3390,7 @@ function reapStaleLock(lockDir: string): boolean {
     if (lockAcquireEpochMs() - mtime <= unstampedGraceMs()) return false;
     // else: an old unstamped dir → genuine leak, fall through to steal.
   } else if (ownerAlive(owner)) {
+    if (!owner.reapLiveOwnerAfterStale) return false;
     // Live owner: only reclaim if its stamp is over-age (a wedged-but-running
     // holder). A fresh, live holder is never robbed.
     if (lockAcquireEpochMs() - owner.startedAtMs <= lockStaleMs()) return false;
@@ -3205,12 +3433,13 @@ export function acquireAuditLock(
   retryMs = 100,
   intent?: string,
   space?: string,
+  reapLiveOwnerAfterStale = true,
 ): boolean {
   const lockDir = auditLockDir(projectDir, intent, space);
   for (let i = 0; i <= maxRetries; i++) {
     try {
       mkdirSync(lockDir);
-      writeOwnerStamp(lockDir);
+      writeOwnerStamp(lockDir, reapLiveOwnerAfterStale);
       return true;
     } catch {
       // EEXIST: someone holds it. Before sleeping, try to reap a dead/stale
@@ -3219,7 +3448,7 @@ export function acquireAuditLock(
       if (reapStaleLock(lockDir)) {
         try {
           mkdirSync(lockDir);
-          writeOwnerStamp(lockDir);
+          writeOwnerStamp(lockDir, reapLiveOwnerAfterStale);
           return true;
         } catch {
           // another waiter beat us to the freed dir — fall through to sleep
@@ -3246,6 +3475,20 @@ export function releaseAuditLock(projectDir: string, intent?: string, space?: st
     process.off("exit", handler);
     AUDIT_LOCK_EXIT_HANDLERS.delete(key);
   }
+}
+
+/** True only while `ownerPid` is the live process stamped into this lock.
+ *  Used by synchronous child tools whose parent deliberately keeps the
+ *  workspace lock held across the child's work. */
+export function auditLockOwnedByProcess(
+  projectDir: string,
+  ownerPid: number,
+  intent?: string,
+  space?: string,
+): boolean {
+  if (!Number.isInteger(ownerPid) || ownerPid <= 0) return false;
+  const owner = readOwnerStamp(auditLockDir(projectDir, intent, space));
+  return owner?.pid === ownerPid && ownerAlive(owner);
 }
 
 // Tracks per-identity exit handlers that release the audit lock if a caller
@@ -3307,11 +3550,30 @@ export function withAuditLock<T>(
   fn: () => T extends Promise<unknown> ? never : T,
   intent?: string,
   space?: string,
+  // Acquire budget (default ~5s). A caller that legitimately waits behind a
+  // long-lived holder (select-plugins behind a full plugin compose: compile +
+  // runner regeneration) passes a larger budget; dead holders are reaped
+  // immediately regardless, so a big budget only ever waits on live work.
+  maxRetries = 50,
+  retryMs = 100,
+  // Long external operations such as repository clones can exceed the generic
+  // ten-minute stale threshold while still making progress. Those callers opt
+  // out of live-owner reaping; dead owners remain immediately reclaimable.
+  reapLiveOwnerAfterStale = true,
 ): T extends Promise<unknown> ? never : T {
   const key = auditLockIdentity(projectDir, intent, space);
   const currentDepth = AUDIT_LOCK_DEPTH.get(key) ?? 0;
   if (currentDepth === 0) {
-    if (!acquireAuditLock(projectDir, 50, 100, intent, space)) {
+    if (
+      !acquireAuditLock(
+        projectDir,
+        maxRetries,
+        retryMs,
+        intent,
+        space,
+        reapLiveOwnerAfterStale,
+      )
+    ) {
       throw new Error(`Failed to acquire audit lock for ${key} after retries`);
     }
     // Safety net: if the body calls process.exit (Bun skips `finally` in that
@@ -3389,14 +3651,19 @@ export function detectLeakedLocks(projectDir: string, clear = false): LeakedLock
       }
     } else if (!ownerAlive(owner)) {
       reason = "dead-owner";
-    } else if (lockAcquireEpochMs() - owner.startedAtMs > lockStaleMs()) {
+    } else if (
+      owner.reapLiveOwnerAfterStale &&
+      lockAcquireEpochMs() - owner.startedAtMs > lockStaleMs()
+    ) {
       reason = "over-age";
     }
     if (reason === null) return; // a live, fresh, stamped lock is legitimately held
-    leaks.push({ bucket: bucketLabel, lockDir, ownerPid: owner?.pid ?? null, reason });
-    if (clear) {
-      try { rmSync(lockDir, { recursive: true, force: true }); } catch { /* already gone */ }
+    if (clear && !reapStaleLock(lockDir)) {
+      // Ownership changed after classification, or another reaper already won.
+      // Never remove a fresh replacement lock by pathname.
+      return;
     }
+    leaks.push({ bucket: bucketLabel, lockDir, ownerPid: owner?.pid ?? null, reason });
   };
   // Workspace sentinel bucket.
   probe(WORKSPACE_LOCK_SENTINEL);
