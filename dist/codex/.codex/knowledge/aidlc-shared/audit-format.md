@@ -82,7 +82,7 @@ All event names follow `SUBJECT_PAST_VERB` — every event answers "what happene
 | `GATE_REJECTED` | Human requested changes | Timestamp, Stage, Feedback, optional `Recovered=true` (backfilled by the approve-time revision backstop) | `tools/aidlc-state.ts reject`, `tools/aidlc-state.ts approve` (backstop backfill) |
 | `QUESTION_ANSWERED` | Non-gate question answered by user | Timestamp, Stage, Details | `tools/aidlc-log.ts answer` |
 | `REVIEW_REQUESTED` | Conductor dispatches the §12a reviewer sub-agent | Timestamp, Stage, Reviewer, optional Unit (per-unit stages), optional Iteration | `tools/aidlc-log.ts review` |
-| `REVIEW_COMPLETED` | Reviewer verdict read; gates the approval of a reviewer-bearing stage | Timestamp, Stage, Reviewer, Verdict, optional Unit (per-unit stages), optional Iteration | `tools/aidlc-log.ts review --verdict` |
+| `REVIEW_COMPLETED` | Reviewer verdict read; gates the approval of a reviewer-bearing stage | Timestamp, Stage, Reviewer, Verdict, Artifact Fingerprint (`sha256:<hex>` over declared artifact paths and bytes), optional Unit (per-unit stages), optional Iteration | `tools/aidlc-log.ts review --verdict` |
 
 ### Artifact Events (3 events — hook-emitted)
 
@@ -106,7 +106,7 @@ the active space's shared `codekb/<repo>/` tree.
 | Event | When | Required Fields | Emitter |
 |-------|------|-----------------|---------|
 | `REVIEWER_SCOPE_BLOCKED` | A per-unit reviewer's tool call was refused for reaching into sibling units' `construction/` paths (the §12a read-scope bound) | Timestamp, Tool, Target, Stage, Unit | `hooks/aidlc-reviewer-scope.ts` (PreToolUse) |
-| `REVIEW_FREEZE_BLOCKED` | A `produces[]` write was refused because it would invalidate a fresh READY review receipt before the gate (the §12a terminal-receipt ordering) | Timestamp, Tool, Target, Stage, optional Unit | `hooks/aidlc-review-freeze.ts` (PreToolUse) |
+| `REVIEW_FREEZE_BLOCKED` | A file-tool or shell `produces[]` write was refused because it would invalidate a fresh READY review receipt before the gate (the §12a terminal-receipt ordering) | Timestamp, Tool, Target, Stage, optional Unit | `hooks/aidlc-review-freeze.ts` (PreToolUse) |
 
 ### Utility Events (1 event)
 

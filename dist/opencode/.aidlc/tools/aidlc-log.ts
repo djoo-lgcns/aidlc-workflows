@@ -17,7 +17,9 @@ import {
   isAutonomousMode,
   parseCheckboxes,
   readAllAuditShards,
+  reviewArtifactFingerprint,
   resolveProjectDir,
+  resolveStage,
   stateFilePath,
   withAuditLock,
 } from "./aidlc-lib.js";
@@ -301,6 +303,15 @@ function handleReview(args: string[]): void {
       );
     }
     fields.Verdict = verdict;
+    const stage = resolveStage(flags.stage);
+    if (!stage) error(`Cannot record review: unknown stage "${flags.stage}"`);
+    const fingerprint = reviewArtifactFingerprint(pd, stage, flags.unit);
+    if (fingerprint === null) {
+      error(
+        `Cannot record review for "${flags.stage}": the declared artifact set could not be fingerprinted. Resolve the active intent and readable artifact paths, then record the verdict again.`,
+      );
+    }
+    fields["Artifact Fingerprint"] = fingerprint;
     eventType = "REVIEW_COMPLETED";
   } else {
     eventType = "REVIEW_REQUESTED";

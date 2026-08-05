@@ -20,9 +20,9 @@
     "render-surface": "tui"
   },
   "counts": {
-    "total": 489,
+    "total": 494,
     "enumeratedByClass": {
-      "function": 253,
+      "function": 258,
       "audit": 75,
       "scope": 9,
       "stage": 32,
@@ -31,7 +31,7 @@
       "render-surface": 7
     },
     "coveredByClass": {
-      "function": 107,
+      "function": 111,
       "audit": 34,
       "scope": 9,
       "stage": 9,
@@ -2775,6 +2775,22 @@
     },
     {
       "unitClass": "function",
+      "unitId": "function:reviewArtifactFingerprint",
+      "minMechanism": "none",
+      "coveredBy": [
+        {
+          "file": "tests/unit/t115.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/unit/t236-ensemble-evidence-gate.test.ts",
+          "mechanism": "cli"
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "unitClass": "function",
       "unitId": "function:REVIEWER_DISPATCH_TTL_MS",
       "minMechanism": "none",
       "coveredBy": [],
@@ -3450,6 +3466,18 @@
       "unitId": "aidlc-review-freeze",
       "minMechanism": "none",
       "coveredBy": [
+        {
+          "file": "tests/unit/t228-hook-run-exports.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/unit/t230-dispatcher-routes.test.ts",
+          "mechanism": "cli"
+        },
+        {
+          "file": "tests/unit/t238-build-binaries.test.ts",
+          "mechanism": "cli"
+        },
         {
           "file": "tests/unit/t264-review-freeze-hook.test.ts",
           "mechanism": "cli"
