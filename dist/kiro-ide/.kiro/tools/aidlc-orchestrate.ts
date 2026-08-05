@@ -166,6 +166,8 @@ import {
 // and utility never imports this module - no cycle).
 import { inferScopeFromText } from "./aidlc-utility.ts";
 import { resolveHarnessPath, resolveHarnessRoot } from "./aidlc-runtime-paths.ts";
+import { inspectStageValidity } from "./aidlc-validity.ts";
+// AIDLC_STAGE_VALIDITY_PROJECTION_V1
 import {
   readRuleBundle,
   rulesContentEntries,
@@ -3028,6 +3030,30 @@ function handleNext(args: string[], projectDir: string | undefined): void {
         "or (3) a change to how the remaining plan is shaped?",
       flags.intent,
       inferred.scope,
+  // A completed checkbox is historical execution state, not proof that the
+  // result still matches the artifacts it consumed. Project validity from the
+  // append-only completion evidence before normal routing. This is read-only.
+  try {
+    const validity = inspectStageValidity(pd, stateContent);
+    if (validity.issues.length > 0) {
+      const direct = validity.issues
+        .filter((issue) => issue.direct)
+        .map((issue) => issue.stage);
+      const downstream = validity.issues
+        .filter((issue) => !issue.direct)
+        .map((issue) => issue.stage);
+      const earliest = direct[0] ?? validity.issues[0].stage;
+      emit(errorDirective(
+        `Completed stage result(s) no longer match their validation basis. ` +
+          `Directly stale: ${direct.join(", ") || "none"}. ` +
+          `Downstream revalidation required: ${downstream.join(", ") || "none"}. ` +
+          `Re-enter the earliest affected stage with /aidlc --stage ${earliest}.`,
+      ));
+      return;
+    }
+  } catch (error) {
+    emit(errorDirective(
+      `Stage-validity inspection failed: ${errorMessage(error)}`,
     ));
     return;
   }
