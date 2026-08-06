@@ -72,6 +72,9 @@ import {
 } from "./aidlc-lib.js";
 import { memoryDirFor } from "./aidlc-graph.ts";
 import { compiledExecutable } from "./aidlc-runtime-paths.ts";
+import { artifactFileName } from "./aidlc-artifact-resolution.ts";
+import { stageValidationAuditFields } from "./aidlc-validity.ts";
+// AIDLC_STAGE_VALIDITY_PROJECTION_V2
 import {
   stageUsageAuditFields,
   workflowUsageAuditFields,
@@ -1350,6 +1353,7 @@ function producesArtifactsExist(
   for (const dir of producesDirsForStage(pd, stage)) {
     for (const name of produces) {
       if (isRegularFile(join(dir, `${name}.md`))) return true;
+      if (existsSync(join(dir, `${artifactFileName(name)}`))) return true;
     }
   }
   return false;
@@ -1872,6 +1876,7 @@ function handleAdvance(args: string[]): void {
     if (!alreadyMarkedCompleted || !stageCompletedAlreadyAudited) {
       emitAudit(pd, "STAGE_COMPLETED", {
         Stage: completedSlug,
+        ...stageValidationAuditFields(pd, completedStage, content),
         Details: `Stage ${completedStage.name} completed`,
         ...usageFields,
       });
@@ -2101,6 +2106,7 @@ function handleCompleteWorkflow(args: string[]): void {
     if (!alreadyMarkedCompleted || !stageCompletedAlreadyAudited) {
       emitAudit(pd, "STAGE_COMPLETED", {
         Stage: completedSlug,
+        ...stageValidationAuditFields(pd, completedStage, content),
         Details: `Final stage ${completedStage.name} completed`,
         ...stageUsageFields,
       });
@@ -2382,6 +2388,7 @@ function handleApprove(args: string[]): void {
 
     emitAudit(pd, "STAGE_COMPLETED", {
       Stage: slug,
+      ...stageValidationAuditFields(pd, stage, content),
       Details: `Stage ${stage.name} approved by gate`,
       ...usageFields,
     });

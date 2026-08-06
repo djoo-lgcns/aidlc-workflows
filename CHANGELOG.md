@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.63] - 2026-08-10
+
+Add dependency-aware validity projection for completed stages. No manual migration is required; existing audit ledgers remain compatible and become tracked when stages complete again.
+
+- Resolve canonical artifact aliases, active Bolt DAG units, and `produces_kinds` through one shared runtime resolver.
+- Record compact schema-2 structure/content fingerprints per observed canonical artifact.
+- Propagate revalidation through artifact inputs observed by completed consumers.
+- Preserve historical completion checkboxes while blocking routing past stale tracked AI-DLC artifacts.
+
 ## [2.5.62] - 2026-08-08
 
 `intent-create` now fails closed when invoked without meaningful work details, and starting a second unrelated intent hands the conductor to a fresh session so the new work does not inherit the prior intent's transcript. Scope runners (`/aidlc-<scope>`) now offer the same explicit second-intent path instead of dead-ending at a completed workflow. **Upgrade:** re-copy your `dist/<harness>/` shell into the project so the updated tools, hooks, orchestrator skill, and scope runners are installed.
