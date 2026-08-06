@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [2.5.70] - 2026-08-13
+
+Add dependency-aware validity projection for completed stages. No manual migration is required; existing audit ledgers remain compatible and become tracked when stages complete again.
+
+- Resolve canonical artifact aliases, active Bolt DAG units, and `produces_kinds` through one shared runtime resolver.
+- Record compact schema-2 structure/content fingerprints per observed canonical artifact.
+- Propagate revalidation through artifact inputs observed by completed consumers.
+- Preserve historical completion checkboxes while blocking routing past stale tracked AI-DLC artifacts.
+
 ## [2.5.69] - 2026-08-13
 
 Cursor IDE no longer blocks every tool call on a fail-closed PreToolUse hook that allowed with empty stdout. The Cursor adapter now emits `{"permission":"allow"}` on both allow returns, matching Cursor's required permission JSON; deny JSON and `failClosed: true` are unchanged. Cursor CLI already treated silence as allow, so CLI-only verification missed this. **Upgrade:** refresh `dist/cursor/` and rerun `bun dist/cursor/install.ts <project>`.
