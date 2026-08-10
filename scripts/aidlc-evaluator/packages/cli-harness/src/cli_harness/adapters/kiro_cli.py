@@ -75,6 +75,20 @@ _APPROVAL_SIGNALS = re.compile(
     re.IGNORECASE,
 )
 
+# Numbered option lists — Kiro presents them as
+#   1. First option
+#   2. Second option — extra description
+# on separate lines.  We treat "two or more lines of the form ``\d+\.\s+``" as
+# an option-selection prompt so the turn classifier does not misread the trailing
+# option text as a "done" signal.
+_OPTION_LINE_RE = re.compile(r"^\s*\d+\.\s+\S", re.MULTILINE)
+
+
+def _has_option_list(text: str) -> bool:
+    """Return True when ``text`` contains at least two numbered option lines."""
+    return len(_OPTION_LINE_RE.findall(text)) >= 2
+
+
 _ACTIVE_SIGNALS = re.compile(
     r"(using tool:|I'll create|I will run|Reading file|Writing file|"
     r"Layer \d|Step \d|proceeding to|✅|→)",
@@ -106,6 +120,10 @@ def _classify_turn_output(raw_output: str) -> str:
 
     if _ACTIVE_SIGNALS.search(response):
         return "continue"
+    # Numbered option lists are approval-style prompts, not completion signals,
+    # even if the option labels happen to contain words like "done" or "nothing".
+    if _has_option_list(text) or _has_option_list(response):
+        return "approval_needed"
     if _APPROVAL_SIGNALS.search(text):
         return "approval_needed"
     if _DONE_SIGNALS.search(response) and len(response) < 500:

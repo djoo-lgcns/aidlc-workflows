@@ -58,6 +58,16 @@ clearly requires more phases.
 - Keep answers to 1-3 sentences per question. Be decisive — do not hedge.
 - Do NOT ask questions back. Do NOT add scope (README, CI, docs, etc.).
 - Do NOT declare the project "done" or "shipped" — that is Kiro's decision.
+
+## Numbered option lists
+
+When Kiro presents a numbered list of options (a list of the form
+"1. First option" / "2. Second option" on separate lines), you MUST reply with a
+single number that identifies your choice.  Prefer option 1 unless another option
+is clearly required by the vision or tech-env — option 1 is typically the natural
+forward-progression choice ("Nothing to add", "Approve and continue", "Use
+recommended defaults").  Do NOT reply with prose or explanations; reply with
+ONLY the option number as a single digit on its own line.
 """
 
 _USER_TEMPLATE = """\
@@ -175,4 +185,11 @@ def generate_human_response(
             raise RuntimeError(
                 f"Human analog LLM call failed and AIDLC_EVAL_STRICT_HUMAN=1: {exc}"
             ) from exc
+        # If Kiro showed a numbered option list, default to option 1 (the natural
+        # forward-progression choice) instead of the free-form approval text
+        # which Kiro won't map to any option.
+        import re as _re
+        option_lines = _re.findall(r"^\s*\d+\.\s+\S", turn_output, _re.MULTILINE)
+        if len(option_lines) >= 2:
+            return "1"
         return "Approve & Continue."
