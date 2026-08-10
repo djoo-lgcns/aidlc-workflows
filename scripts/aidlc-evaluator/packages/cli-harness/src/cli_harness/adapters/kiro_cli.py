@@ -153,20 +153,29 @@ def _log(msg: str) -> None:
 
 
 def _find_aidlc_docs(workspace: Path) -> Path | None:
-    """Find the aidlc-docs/ directory anywhere under workspace.
+    """Find the AIDLC output directory anywhere under workspace.
 
-    Checks workspace/aidlc-docs/ first (v1), then searches one level deep
-    for <subdir>/aidlc-docs/ (covers v2's org-ai-kb/aidlc-docs/ layout).
+    v1 layouts put artifacts under ``workspace/aidlc-docs/``; v2 layouts put
+    them under ``workspace/aidlc/spaces/<space>/intents/<slug>/`` with the
+    top-level directory being ``aidlc/``.  We accept either.
+
+    Search order:
+      1. ``workspace/aidlc-docs/`` (v1 direct)
+      2. ``workspace/aidlc/`` (v2 direct)
+      3. one level deep for either name (covers legacy nested layouts)
+
     Returns the first match, or None if not found.
     """
-    direct = workspace / "aidlc-docs"
-    if direct.is_dir():
-        return direct
+    for name in ("aidlc-docs", "aidlc"):
+        direct = workspace / name
+        if direct.is_dir():
+            return direct
     for child in sorted(workspace.iterdir()):
         if child.is_dir() and not child.name.startswith("."):
-            candidate = child / "aidlc-docs"
-            if candidate.is_dir():
-                return candidate
+            for name in ("aidlc-docs", "aidlc"):
+                candidate = child / name
+                if candidate.is_dir():
+                    return candidate
     return None
 
 
