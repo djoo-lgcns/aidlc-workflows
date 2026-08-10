@@ -227,7 +227,34 @@ class KiroCLIAdapter(CLIAdapter):
         """Execute the full AIDLC workflow through kiro-cli.
 
         Runs directly in ``<output_dir>/workspace/`` — no temp dir or copy step.
+
+        For v2 distributions (``kiro_dist_path`` set), delegate to
+        :class:`cli_harness.adapters.kiro_acp.KiroACPAdapter` by default so
+        the run uses the officially-supported Kiro CLI v3 programmatic entry
+        point (``kiro-cli acp``).  Set ``AIDLC_EVAL_KIRO_MODE=chat_watchdog``
+        to fall back to the v2-style ``chat --no-interactive`` execution
+        (kept as a workaround for the v3 chat headless "Known gap"; that path
+        uses an idle-timeout watchdog to detect turn completion).
         """
+        # v2 dispatch: try ACP first, fall back to the chat-watchdog workaround
+        # if the caller opted out or if importing the ACP adapter fails.
+        mode = os.environ.get("AIDLC_EVAL_KIRO_MODE", "acp").strip().lower()
+        is_v2_dist = (
+            config.kiro_dist_path is not None
+            and config.kiro_dist_path.is_dir()
+        )
+        if is_v2_dist and mode == "acp":
+            try:
+                from cli_harness.adapters.kiro_acp import KiroACPAdapter
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "kiro_acp adapter import failed, falling back to chat-watchdog: %s",
+                    exc,
+                )
+            else:
+                _log("Dispatching v2 run to KiroACPAdapter (kiro-cli acp)")
+                return KiroACPAdapter(verbose=self.verbose).run(config)
+
         ok, msg = self.check_prerequisites()
         if not ok:
             return AdapterResult(
