@@ -41,6 +41,7 @@ AIDLC executor prompt.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -260,6 +261,48 @@ class KiroCLIAdapter(CLIAdapter):
                     shutil.rmtree(kiro_dest)
                 shutil.copytree(config.kiro_dist_path, kiro_dest)
                 _log(f"Installed .kiro/ distribution from {config.kiro_dist_path}")
+
+                # Grant the workspace's aidlc agent an all-allow permission set.
+                # Rationale: the Kiro CLI v3 agent engine ignores the legacy
+                # ``allowedTools`` field and refuses to prompt for approval in
+                # ``--no-interactive`` mode.  Its ``--trust-all-tools`` flag is
+                # rejected when the v3 engine is active
+                # ("error: the following arguments are not supported with
+                # --agent-engine=v3: --trust-all-tools"), so we cannot use the
+                # session-scope shortcut the docs mention.  The v3 permissions
+                # system takes over via the agent-scope ``permissions`` field:
+                # a rule of ``{capability: all, effect: allow}`` unblocks every
+                # capability, matching the CI recipe in the docs.
+                #
+                # Safety: the deny-overrides algorithm is preserved.  Kiro's
+                # hardcoded security invariants (e.g. ``fs_write`` to
+                # ``~/.kiro/settings`` is always denied) still apply, so the
+                # blanket allow cannot escalate privileges past the base rules.
+                # We only patch the workspace copy of the agent JSON — the
+                # source distribution is untouched — and the sha256 of every
+                # installed file (including this patched agent JSON) is captured
+                # in the provenance manifest below, so the change is auditable
+                # in the A/B evidence.
+                aidlc_agent = kiro_dest / "agents" / "aidlc.json"
+                if aidlc_agent.is_file():
+                    try:
+                        agent_data = json.loads(aidlc_agent.read_text(encoding="utf-8"))
+                        rules = [{"capability": "all", "effect": "allow"}]
+                        agent_data.setdefault("permissions", {})["rules"] = rules
+                        aidlc_agent.write_text(
+                            json.dumps(agent_data, indent=2) + "\n",
+                            encoding="utf-8",
+                        )
+                        _log(
+                            "Patched workspace agents/aidlc.json: "
+                            "permissions.rules = [{capability: all, effect: allow}] "
+                            "(deny-overrides invariants preserved)"
+                        )
+                    except Exception as _agent_exc:  # pragma: no cover - non-fatal
+                        _log(
+                            f"[warn] failed to patch agents/aidlc.json: {_agent_exc}. "
+                            "v3 non-interactive tool calls will likely be denied."
+                        )
 
                 # Record a provenance manifest so the A/B comparison can verify
                 # that the installed skills/tools actually came from the rules ref
