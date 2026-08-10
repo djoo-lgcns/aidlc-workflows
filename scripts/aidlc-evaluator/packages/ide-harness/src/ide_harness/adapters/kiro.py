@@ -10,9 +10,12 @@ directory (e.g. ``dist/kiro/.kiro``), the adapter:
 
 1. Copies the entire ``.kiro/`` tree into the workspace root so Kiro picks up
    skills, agents, hooks, and protocols natively.
-2. Sends ``/aidlc\\n\\n<vision content>`` as the initial prompt, invoking the
-   top-level ``aidlc`` skill in the v2 distribution (there is no ``/skill``
-   subcommand in modern Kiro CLI).
+2. Runs ``kiro-cli chat --agent-engine v3 --agent aidlc`` so the aidlc agent
+   registers ``/aidlc`` as a slash command via the v3 engine.
+3. Sends ``/aidlc\\n\\n<vision content>`` as the initial prompt, invoking
+   the aidlc skill directly.
+4. Passes an explicit tool whitelist (``--trust-tools=…``) because the v3
+   engine does not accept ``--trust-all-tools``.
 3. Detects completion by checking for an ``intent-state.md`` file containing
    ``status: complete``.
 
@@ -221,7 +224,7 @@ class KiroAdapter(IDEAdapter):
 
                 vision_content = config.vision_path.read_text(encoding="utf-8")
                 prompt = config.prompt_template or _render_v2_prompt(vision_content)
-                _log("Using v2 agentic execution (/aidlc)")
+                _log("Using v2 agentic execution (engine=v3, agent=aidlc, /aidlc slash)")
             else:
                 # v1 legacy: inject rules as a steering file
                 steering_dir = workspace / ".kiro" / "steering"
@@ -241,7 +244,16 @@ class KiroAdapter(IDEAdapter):
                 prompt = config.prompt_template or render_prompt()
                 _log("Using v1 legacy execution (steering file)")
 
-            base_flags = ["--no-interactive", "--trust-all-tools"]
+            base_flags = ["--no-interactive"]
+            if is_v2:
+                base_flags += [
+                    "--agent-engine", "v3",
+                    "--trust-tools=fs_read,fs_write,execute_bash,todo_list,thinking,subagent",
+                ]
+                if (workspace / ".kiro" / "agents" / "aidlc.json").is_file():
+                    base_flags += ["--agent", "aidlc"]
+            else:
+                base_flags += ["--trust-all-tools"]
 
             log_path = config.output_dir / "kiro-session.log"
             _log(f"Session log: {log_path}")

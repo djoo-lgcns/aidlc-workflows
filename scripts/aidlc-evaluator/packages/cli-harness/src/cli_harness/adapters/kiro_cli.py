@@ -1,7 +1,8 @@
 """Kiro CLI adapter — drives AIDLC workflows via kiro-cli subprocess.
 
-Uses ``kiro-cli chat`` with ``--no-interactive`` and ``--trust-all-tools``
-flags for fully headless execution.
+Uses ``kiro-cli chat --no-interactive`` for fully headless execution.  Tool
+authorization depends on the agent engine (v3 requires an explicit whitelist
+via ``--trust-tools``; the v1 legacy path uses ``--trust-all-tools``).
 
 ## v2 agentic execution (default when kiro_dist_path is set)
 
@@ -10,10 +11,21 @@ directory (e.g. ``dist/kiro/.kiro``), the adapter:
 
 1. Copies the entire ``.kiro/`` tree into the workspace root so Kiro picks up
    skills, agents, hooks, and protocols natively.
-2. Sends ``/aidlc\\n\\n<vision content>`` as the initial prompt, invoking the
-   top-level ``aidlc`` skill in the v2 distribution (there is no ``/skill``
-   subcommand in modern Kiro CLI).
-3. Detects completion by checking for an ``intent-*/state/intent-state.md`` file
+2. Runs ``kiro-cli chat --agent-engine v3 --agent aidlc`` so the aidlc agent
+   and its skills load into the v3 agent engine.  The v3 engine registers
+   agent-scoped skills as slash commands, which is the mechanism upstream
+   ``.kiro/agents/aidlc.json`` describes ("run /aidlc to start or resume a
+   workflow"). The v2 engine (default in older Kiro CLI builds) does NOT
+   expose skills as slash commands, so the invocation would fail there.
+3. Sends ``/aidlc\\n\\n<vision content>`` as the initial prompt, invoking
+   the top-level aidlc skill directly.
+4. Because the v3 engine rejects ``--trust-all-tools``, the adapter passes an
+   explicit whitelist matching the aidlc agent's declared ``tools`` field:
+   ``--trust-tools=fs_read,fs_write,execute_bash,todo_list,thinking,subagent``.
+5. Corporate CA bundles set in the environment (``SSL_CERT_FILE`` for Python
+   / uv, ``NODE_EXTRA_CA_CERTS`` for the Node-based kiro-cli v3 runtime)
+   are inherited by subprocesses via the parent process's environment.
+6. Detects completion by checking for an ``intent-*/state/intent-state.md`` file
    containing ``status: complete``.
 
 The process-check-hook.json in ``.kiro/hooks/`` fires automatically after every
@@ -161,7 +173,7 @@ def _find_aidlc_docs(workspace: Path) -> Path | None:
 class KiroCLIAdapter(CLIAdapter):
     """Adapter for kiro-cli.
 
-    Uses ``kiro-cli chat --no-interactive --trust-all-tools`` for headless
+    Uses ``kiro-cli chat --no-interactive`` for headless
     execution via subprocess.
     """
 
@@ -244,9 +256,9 @@ class KiroCLIAdapter(CLIAdapter):
                 except Exception as _prov_exc:  # pragma: no cover - non-fatal
                     _log(f"[warn] failed to write dist provenance manifest: {_prov_exc}")
 
-                # Verify the ``aidlc`` top-level skill (v2 slash-command target) is
-                # actually present in the installed distribution.  If it's missing
-                # the ``/aidlc`` invocation will fail no matter what we send.
+                # Verify the ``aidlc`` skill and matching agent are actually
+                # present in the installed distribution.  Without both, the v3
+                # engine cannot register ``/aidlc`` as a slash command.
                 if not (kiro_dest / "skills" / "aidlc" / "SKILL.md").is_file():
                     _log(
                         "[warn] installed .kiro/ has no top-level 'aidlc' skill "
@@ -254,11 +266,24 @@ class KiroCLIAdapter(CLIAdapter):
                         "This usually means the rules ref pre-dates the v2 aidlc "
                         "skill or --kiro-dist points at an old snapshot."
                     )
+                if not (kiro_dest / "agents" / "aidlc.json").is_file():
+                    _log(
+                        "[warn] installed .kiro/ has no 'aidlc' agent "
+                        "(agents/aidlc.json); we cannot pass --agent aidlc.  "
+                        "Without the agent context the v3 engine will not expose "
+                        "the aidlc skill as a slash command."
+                    )
 
                 # Build v2 prompt: /aidlc + vision content (top-level aidlc skill)
                 vision_content = config.vision_path.read_text(encoding="utf-8")
                 prompt = config.prompt_template or render_v2_prompt(vision_content)
-                _log("Using v2 agentic execution (/aidlc)")
+                _log("Using v2 agentic execution (engine=v3, agent=aidlc, /aidlc slash)")
+                # Surface any corporate-CA env vars that will be inherited, so
+                # TLS issues (e.g. Node's kiro-cli v3 runtime not trusting the
+                # corporate CA) are diagnosable from the run log.
+                for _env_var in ("SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE"):
+                    if os.environ.get(_env_var):
+                        _log(f"  env {_env_var}={os.environ[_env_var]}")
             else:
                 # v1 legacy: inject rules as a single steering file
                 steering_dir = workspace / ".kiro" / "steering"
@@ -283,8 +308,22 @@ class KiroCLIAdapter(CLIAdapter):
             # Base command flags
             base_flags = [
                 "--no-interactive",
-                "--trust-all-tools",
             ]
+            if is_v2:
+                # v3 agent engine registers agent-scoped skills as slash
+                # commands (upstream aidlc.json contract).  It rejects the
+                # ``--trust-all-tools`` shortcut, so we hand it an explicit
+                # whitelist that matches the aidlc agent's ``tools`` field.
+                base_flags += [
+                    "--agent-engine", "v3",
+                    "--trust-tools=fs_read,fs_write,execute_bash,todo_list,thinking,subagent",
+                ]
+                if (workspace / ".kiro" / "agents" / "aidlc.json").is_file():
+                    base_flags += ["--agent", "aidlc"]
+            else:
+                # v1 legacy: default engine, trust every tool for the monolithic
+                # steering-file prompt.
+                base_flags += ["--trust-all-tools"]
             if config.model:
                 base_flags += ["--model", config.model]
 
