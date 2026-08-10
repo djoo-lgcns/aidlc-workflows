@@ -107,6 +107,7 @@ class TestSimulatorTechEnvPrompt:
         result = SIMULATOR_SYSTEM_PROMPT_TEMPLATE.format(
             vision_content="Build a calculator",
             tech_env_section="\n## The technical environment\n\nUse Python 3.12\n",
+            orchestrator_agent="executor",
         )
         assert "The technical environment" in result
         assert "Use Python 3.12" in result
@@ -116,6 +117,7 @@ class TestSimulatorTechEnvPrompt:
         result = SIMULATOR_SYSTEM_PROMPT_TEMPLATE.format(
             vision_content="Build a calculator",
             tech_env_section="",
+            orchestrator_agent="executor",
         )
         assert "technical environment" not in result.lower().split("how you work")[0]
         assert "Build a calculator" in result
@@ -125,6 +127,7 @@ class TestSimulatorTechEnvPrompt:
         result = SIMULATOR_SYSTEM_PROMPT_TEMPLATE.format(
             vision_content="My vision doc",
             tech_env_section="",
+            orchestrator_agent="executor",
         )
         # The vision content is still present
         assert "My vision doc" in result
