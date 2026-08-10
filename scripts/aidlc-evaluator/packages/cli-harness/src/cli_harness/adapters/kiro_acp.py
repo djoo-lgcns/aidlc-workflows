@@ -135,6 +135,11 @@ class KiroACPClient:
         self._pending: dict[int, Queue] = {}
         self._pending_lock = threading.Lock()
         self._notification_handler: Callable[[dict], None] | None = None
+        # ACP is bidirectional JSON-RPC.  The agent can send *requests* to us
+        # too (e.g. session/request_permission, terminal/create, terminal/wait_for_exit).
+        # We look up a handler by method name; anything without a handler is
+        # answered with JSON-RPC error -32601 so the agent doesn't hang.
+        self._request_handlers: dict[str, Callable[[dict], Any]] = {}
         self._proc: subprocess.Popen | None = None
         self._reader_thread: threading.Thread | None = None
         self._stderr_thread: threading.Thread | None = None
@@ -235,8 +240,8 @@ class KiroACPClient:
             pass
 
     def _dispatch(self, msg: dict) -> None:
-        # response: has "id" and either "result" or "error"
-        if "id" in msg and ("result" in msg or "error" in msg):
+        # response: has "id" and either "result" or "error", NO "method"
+        if "id" in msg and "method" not in msg and ("result" in msg or "error" in msg):
             with self._pending_lock:
                 q = self._pending.pop(msg["id"], None)
             if q is not None:
@@ -244,7 +249,52 @@ class KiroACPClient:
             else:
                 logger.debug("acp response for unknown id: %s", msg.get("id"))
             return
-        # notification: has "method" but no "id" (or an id we don't track)
+
+        # AGENT → CLIENT REQUEST: has both "id" and "method".
+        # ACP is bidirectional JSON-RPC; the agent uses this to ask us to
+        # execute shell commands (terminal/create, terminal/wait_for_exit, …)
+        # and to request tool-use permission (session/request_permission).
+        # Answering these is *mandatory* — the agent will block waiting for
+        # our response, which is exactly what caused the original 45 s hang.
+        if "id" in msg and "method" in msg:
+            method = msg["method"]
+            handler = self._request_handlers.get(method)
+            try:
+                if handler is None:
+                    # Report method-not-found rather than silently ignoring;
+                    # otherwise the agent hangs on the missing response.
+                    logger.warning("acp: no handler for agent request %s", method)
+                    self._send({
+                        "jsonrpc": "2.0",
+                        "id": msg["id"],
+                        "error": {
+                            "code": -32601,
+                            "message": f"Method not found: {method}",
+                        },
+                    })
+                else:
+                    result = handler(msg.get("params", {}) or {})
+                    self._send({
+                        "jsonrpc": "2.0",
+                        "id": msg["id"],
+                        "result": result,
+                    })
+            except Exception as exc:  # pragma: no cover - handler errors surface here
+                logger.exception("acp: handler for %s raised", method)
+                try:
+                    self._send({
+                        "jsonrpc": "2.0",
+                        "id": msg["id"],
+                        "error": {
+                            "code": -32000,
+                            "message": f"Handler for {method} raised: {exc}",
+                        },
+                    })
+                except Exception:
+                    pass
+            return
+
+        # NOTIFICATION: has "method" but no "id".
         if self._notification_handler is not None:
             try:
                 self._notification_handler(msg)
@@ -299,8 +349,269 @@ class KiroACPClient:
     def set_notification_handler(self, handler: Callable[[dict], None]) -> None:
         self._notification_handler = handler
 
+    def register_request_handler(
+        self, method: str, handler: Callable[[dict], Any]
+    ) -> None:
+        """Register a handler for an agent→client JSON-RPC request.
+
+        The handler receives the incoming ``params`` dict and must return a
+        JSON-serialisable ``result`` (or raise, in which case a JSON-RPC
+        error is sent back automatically).
+        """
+        self._request_handlers[method] = handler
+
     def is_alive(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
+
+
+# ---------------------------------------------------------------------------
+# Default agent→client request handlers (permission + terminal)
+# ---------------------------------------------------------------------------
+
+
+def _select_allow_option(options: list[dict]) -> dict | None:
+    """Pick an "allow"-flavoured option from a session/request_permission list.
+
+    Preference order:
+      1. ``kind == "allow_always"`` — sticky auto-allow, best for a headless run.
+      2. ``kind == "allow_once"``   — permit this call only.
+      3. Fallback: first option whose id/kind contains "allow".
+    """
+    if not isinstance(options, list):
+        return None
+    kinds = {"allow_always": 0, "allow_once": 1}
+    ranked: list[tuple[int, dict]] = []
+    for opt in options:
+        if not isinstance(opt, dict):
+            continue
+        kind = str(opt.get("kind") or "")
+        if kind in kinds:
+            ranked.append((kinds[kind], opt))
+    if ranked:
+        ranked.sort(key=lambda pair: pair[0])
+        return ranked[0][1]
+    for opt in options:
+        if not isinstance(opt, dict):
+            continue
+        oid = str(opt.get("optionId") or "")
+        kind = str(opt.get("kind") or "")
+        if "allow" in oid.lower() or "allow" in kind.lower():
+            return opt
+    return None
+
+
+class _TerminalManager:
+    """Runs terminal/* requests on behalf of the ACP client.
+
+    ACP's Terminal protocol lets the agent ask the client to execute shell
+    commands: ``terminal/create`` starts a subprocess and returns a
+    ``terminalId``; ``terminal/output`` / ``terminal/wait_for_exit`` /
+    ``terminal/kill`` / ``terminal/release`` follow.  See
+    https://agentclientprotocol.com/protocol/v1/terminals.
+
+    We keep a per-adapter registry of live subprocesses keyed by terminalId
+    and stream their stdout so ``terminal/output`` can return a snapshot at
+    any time.
+    """
+
+    def __init__(self, workspace: Path) -> None:
+        self._workspace = workspace
+        self._counter = 0
+        self._lock = threading.Lock()
+        self._terminals: dict[str, dict[str, Any]] = {}
+
+    def _new_id(self) -> str:
+        with self._lock:
+            self._counter += 1
+            return f"term-{self._counter}"
+
+    def create(self, params: dict) -> dict:
+        command = params.get("command", "")
+        args = params.get("args") or []
+        cwd = params.get("cwd") or str(self._workspace)
+        env_extra = params.get("env") if isinstance(params.get("env"), dict) else {}
+
+        argv: list[str]
+        if isinstance(command, list):
+            argv = [str(x) for x in command] + [str(a) for a in args]
+        else:
+            argv = [str(command)] + [str(a) for a in args]
+
+        env = os.environ.copy()
+        env.update({str(k): str(v) for k, v in (env_extra or {}).items()})
+
+        _log(f"terminal/create: {argv} cwd={cwd}")
+        # nosec B603 - agent-driven shell execution inside its own workspace
+        # nosemgrep: dangerous-subprocess-use-audit
+        proc = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=env,
+        )
+        term_id = self._new_id()
+        buf_lock = threading.Lock()
+        output_buf: list[str] = []
+
+        def _reader() -> None:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                with buf_lock:
+                    output_buf.append(line)
+
+        threading.Thread(target=_reader, name=f"term-{term_id}", daemon=True).start()
+
+        with self._lock:
+            self._terminals[term_id] = {
+                "proc": proc,
+                "buf_lock": buf_lock,
+                "output_buf": output_buf,
+                "argv": argv,
+                "cwd": cwd,
+            }
+        return {"terminalId": term_id}
+
+    def output(self, params: dict) -> dict:
+        term_id = params.get("terminalId")
+        with self._lock:
+            info = self._terminals.get(term_id)
+        if info is None:
+            raise KeyError(f"unknown terminalId: {term_id!r}")
+        proc = info["proc"]
+        with info["buf_lock"]:
+            text = "".join(info["output_buf"])
+        rc = proc.poll()
+        result: dict[str, Any] = {"output": text, "truncated": False}
+        if rc is not None:
+            result["exitStatus"] = {"exitCode": rc, "signal": None}
+        return result
+
+    def wait_for_exit(self, params: dict) -> dict:
+        term_id = params.get("terminalId")
+        with self._lock:
+            info = self._terminals.get(term_id)
+        if info is None:
+            raise KeyError(f"unknown terminalId: {term_id!r}")
+        proc = info["proc"]
+        rc = proc.wait()
+        return {"exitCode": rc, "signal": None}
+
+    def kill(self, params: dict) -> dict:
+        term_id = params.get("terminalId")
+        with self._lock:
+            info = self._terminals.get(term_id)
+        if info is None:
+            return {}
+        proc = info["proc"]
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        except Exception:  # pragma: no cover
+            pass
+        return {}
+
+    def release(self, params: dict) -> dict:
+        term_id = params.get("terminalId")
+        with self._lock:
+            info = self._terminals.pop(term_id, None)
+        if info is not None:
+            proc = info["proc"]
+            if proc.poll() is None:
+                try:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                except Exception:
+                    pass
+        return {}
+
+
+def _register_default_request_handlers(
+    client: KiroACPClient, workspace: Path
+) -> _TerminalManager:
+    """Wire up the ACP agent→client request handlers this adapter needs.
+
+    Returns the :class:`_TerminalManager` in case the caller wants to inspect
+    live terminals for diagnostics.
+    """
+    tm = _TerminalManager(workspace)
+
+    def _permission(params: dict) -> dict:
+        options = params.get("options") or []
+        chosen = _select_allow_option(options)
+        if chosen is None:
+            # No allow-flavoured option?  Reject explicitly so the agent
+            # gets a definite answer.
+            reject = next(
+                (
+                    o
+                    for o in options
+                    if isinstance(o, dict) and "reject" in str(o.get("kind", "")).lower()
+                ),
+                None,
+            )
+            option_id = (reject or {}).get("optionId") or ""
+            _log(
+                "session/request_permission: no allow option; rejecting "
+                f"(optionId={option_id!r})"
+            )
+            return {"outcome": {"outcome": "selected", "optionId": option_id}}
+        title = (params.get("toolCall") or {}).get("title")
+        _log(
+            f"session/request_permission: auto-selecting {chosen.get('optionId')!r} "
+            f"(kind={chosen.get('kind')!r}) for {title!r}"
+        )
+        # ACP result shape:
+        #   { "outcome": { "outcome": "selected", "optionId": "<id>" } }
+        return {"outcome": {"outcome": "selected", "optionId": chosen.get("optionId")}}
+
+    client.register_request_handler("session/request_permission", _permission)
+    client.register_request_handler("terminal/create", tm.create)
+    client.register_request_handler("terminal/output", tm.output)
+    client.register_request_handler("terminal/wait_for_exit", tm.wait_for_exit)
+    client.register_request_handler("terminal/kill", tm.kill)
+    client.register_request_handler("terminal/release", tm.release)
+
+    # ACP file-system requests (fs/read_text_file, fs/write_text_file).
+    # We advertised support for these in clientCapabilities.fs, so we must
+    # implement them if the agent calls them.
+    def _fs_read(params: dict) -> dict:
+        path = params.get("path")
+        if not path:
+            raise ValueError("fs/read_text_file requires 'path'")
+        line = params.get("line")
+        limit = params.get("limit")
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        if isinstance(line, int) or isinstance(limit, int):
+            lines = text.splitlines(keepends=True)
+            start = int(line) - 1 if isinstance(line, int) and line > 0 else 0
+            end = start + int(limit) if isinstance(limit, int) else None
+            text = "".join(lines[start:end])
+        return {"content": text}
+
+    def _fs_write(params: dict) -> dict:
+        path = params.get("path")
+        content = params.get("content", "")
+        if not path:
+            raise ValueError("fs/write_text_file requires 'path'")
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        return {}
+
+    client.register_request_handler("fs/read_text_file", _fs_read)
+    client.register_request_handler("fs/write_text_file", _fs_write)
+
+    return tm
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +767,10 @@ class KiroACPAdapter(CLIAdapter):
                 stderr_log=stderr_log,
             )
             client.start()
+
+            # ACP is bidirectional: register handlers for the agent→client
+            # requests we know Kiro will send during a v3 workflow.
+            _register_default_request_handlers(client, workspace)
 
             try:
                 # 1. initialize
