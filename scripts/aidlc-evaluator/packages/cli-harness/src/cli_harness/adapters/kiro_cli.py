@@ -48,6 +48,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -435,12 +436,66 @@ class KiroCLIAdapter(CLIAdapter):
                     )
 
                     turn_output_lines: list[str] = []
-                    for line in process.stdout:
-                        log_file.write(_strip_ansi(line))
+                    # Kiro CLI v3 non-TUI mode is not officially supported
+                    # ("Known gap" in v3 docs) — the acp-server keeps stdout
+                    # open after the response completes, so a naive
+                    # ``for line in process.stdout`` reader would block on
+                    # EOF that never arrives.  We watch stdout in a helper
+                    # thread and treat ``IDLE_TIMEOUT`` seconds of silence
+                    # (after we've already received at least one line) as
+                    # the effective end of the turn.
+                    import queue as _q
+                    IDLE_TIMEOUT = 30.0  # seconds of stdout silence => turn done
+                    line_q: "_q.Queue[str | None]" = _q.Queue()
+
+                    def _reader() -> None:
+                        try:
+                            for _line in process.stdout:  # type: ignore[union-attr]
+                                line_q.put(_line)
+                        finally:
+                            line_q.put(None)
+
+                    reader_thread = threading.Thread(
+                        target=_reader, name="kiro-stdout-reader", daemon=True,
+                    )
+                    reader_thread.start()
+
+                    got_any_line = False
+                    idle_kill = False
+                    while True:
+                        try:
+                            _line = line_q.get(timeout=IDLE_TIMEOUT)
+                        except _q.Empty:
+                            if not got_any_line:
+                                # No output at all yet — keep waiting up to the
+                                # global run timeout below rather than terminate
+                                # a possibly-slow initial connect.
+                                elapsed_total = time.monotonic() - start_time
+                                if elapsed_total >= config.timeout_seconds:
+                                    _log(f"Turn {turn}: global timeout with no output; killing")
+                                    process.kill()
+                                    break
+                                continue
+                            _log(
+                                f"Turn {turn}: idle for {IDLE_TIMEOUT:.0f}s after last "
+                                "output; assuming v3 non-TUI response is complete."
+                            )
+                            idle_kill = True
+                            process.terminate()
+                            try:
+                                process.wait(timeout=5)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                            break
+                        if _line is None:
+                            # Reader saw EOF (process ended cleanly).
+                            break
+                        got_any_line = True
+                        log_file.write(_strip_ansi(_line))
                         log_file.flush()
-                        turn_output_lines.append(line)
+                        turn_output_lines.append(_line)
                         if self.verbose:
-                            sys.stderr.write(line)
+                            sys.stderr.write(_line)
                             sys.stderr.flush()
 
                     remaining = config.timeout_seconds - (time.monotonic() - start_time)
