@@ -10,8 +10,9 @@ directory (e.g. ``dist/kiro/.kiro``), the adapter:
 
 1. Copies the entire ``.kiro/`` tree into the workspace root so Kiro picks up
    skills, agents, hooks, and protocols natively.
-2. Sends ``/skill aidlc-orchestrator\\n<vision content>`` as the initial prompt,
-   activating the v2 orchestrator skill.
+2. Sends ``/aidlc\\n\\n<vision content>`` as the initial prompt, invoking the
+   top-level ``aidlc`` skill in the v2 distribution (there is no ``/skill``
+   subcommand in modern Kiro CLI).
 3. Detects completion by checking for an ``intent-*/state/intent-state.md`` file
    containing ``status: complete``.
 
@@ -220,10 +221,44 @@ class KiroCLIAdapter(CLIAdapter):
                 shutil.copytree(config.kiro_dist_path, kiro_dest)
                 _log(f"Installed .kiro/ distribution from {config.kiro_dist_path}")
 
-                # Build v2 prompt: /skill aidlc-orchestrator + vision content
+                # Record a provenance manifest so the A/B comparison can verify
+                # that the installed skills/tools actually came from the rules ref
+                # (rather than the evaluator's own dist snapshot).
+                try:
+                    import hashlib
+                    manifest_lines = [
+                        f"source: {config.kiro_dist_path}",
+                        "",
+                        "# sha256  path (relative to installed .kiro/)",
+                    ]
+                    for f in sorted(kiro_dest.rglob("*")):
+                        if f.is_file():
+                            digest = hashlib.sha256(f.read_bytes()).hexdigest()
+                            rel = f.relative_to(kiro_dest)
+                            manifest_lines.append(f"{digest}  {rel}")
+                    manifest_path = config.output_dir / "kiro-dist-manifest.txt"
+                    manifest_path.write_text(
+                        "\n".join(manifest_lines) + "\n", encoding="utf-8"
+                    )
+                    _log(f"Wrote dist provenance manifest → {manifest_path}")
+                except Exception as _prov_exc:  # pragma: no cover - non-fatal
+                    _log(f"[warn] failed to write dist provenance manifest: {_prov_exc}")
+
+                # Verify the ``aidlc`` top-level skill (v2 slash-command target) is
+                # actually present in the installed distribution.  If it's missing
+                # the ``/aidlc`` invocation will fail no matter what we send.
+                if not (kiro_dest / "skills" / "aidlc" / "SKILL.md").is_file():
+                    _log(
+                        "[warn] installed .kiro/ has no top-level 'aidlc' skill "
+                        "(skills/aidlc/SKILL.md); '/aidlc' invocation will fail. "
+                        "This usually means the rules ref pre-dates the v2 aidlc "
+                        "skill or --kiro-dist points at an old snapshot."
+                    )
+
+                # Build v2 prompt: /aidlc + vision content (top-level aidlc skill)
                 vision_content = config.vision_path.read_text(encoding="utf-8")
                 prompt = config.prompt_template or render_v2_prompt(vision_content)
-                _log("Using v2 agentic execution (/skill aidlc-orchestrator)")
+                _log("Using v2 agentic execution (/aidlc)")
             else:
                 # v1 legacy: inject rules as a single steering file
                 steering_dir = workspace / ".kiro" / "steering"

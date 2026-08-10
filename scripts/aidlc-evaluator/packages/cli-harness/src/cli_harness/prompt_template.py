@@ -111,14 +111,20 @@ not needed, but always continue to the next stage.
 
 
 V2_ORCHESTRATOR_PROMPT = """\
-/skill aidlc-orchestrator
+/aidlc
 
 {intent}
 """
 
 
 def render_v2_prompt(intent: str) -> str:
-    """Render the v2 agentic prompt that invokes the aidlc-orchestrator skill.
+    """Render the v2 agentic prompt that invokes the top-level ``aidlc`` skill.
+
+    The v2 Kiro distribution ships a top-level ``skills/aidlc/SKILL.md`` that
+    is invoked with the ``/aidlc`` slash command (there is no ``/skill``
+    subcommand in modern Kiro CLI).  We send the slash command on its own line
+    followed by the intent so Kiro routes the message to the skill and reads
+    the intent as the initial user input.
 
     Args:
         intent: The raw development intent (vision content or a one-line summary).

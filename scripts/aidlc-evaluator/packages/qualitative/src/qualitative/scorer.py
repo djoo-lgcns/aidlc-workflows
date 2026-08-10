@@ -154,14 +154,21 @@ logger = logging.getLogger(__name__)
 
 
 class LlmScorer:
-    """Scorer that uses an LLM via Amazon Bedrock for semantic evaluation.
+    """Scorer that uses an LLM for semantic evaluation.
 
-    Requires boto3 and valid AWS credentials configured for Bedrock access.
+    Backend selection (see :mod:`shared.llm`):
+      * ``AIDLC_EVAL_SCORER_BACKEND`` (component override)
+      * ``AIDLC_EVAL_LLM_BACKEND`` (global)
+      * default ``bedrock``
 
-    If a single document fails (malformed LLM response, transient Bedrock
-    error), the scorer falls back to ``HeuristicScorer`` for that document
-    and continues with the remaining pairs rather than aborting the entire
-    qualitative evaluation.
+    With the Bedrock backend, requires ``boto3`` and valid AWS credentials for
+    ``bedrock:InvokeModel``.  With the ``kiro-cli`` backend, uses the
+    logged-in Kiro CLI credit and does not touch AWS at all.
+
+    If a single document fails (malformed reply, transient error), the scorer
+    falls back to :class:`HeuristicScorer` for that document and continues
+    with the remaining pairs rather than aborting the entire qualitative
+    evaluation.
     """
 
     def __init__(
@@ -171,22 +178,9 @@ class LlmScorer:
         profile: str | None = None,
         max_tokens: int = 512,
     ) -> None:
-        import boto3
-        from botocore.config import Config as BotoConfig
-
-        session_kwargs: dict = {}
-        if region:
-            session_kwargs["region_name"] = region
-        if profile:
-            session_kwargs["profile_name"] = profile
-        session = boto3.Session(**session_kwargs)
-        client_config = BotoConfig(
-            read_timeout=300,
-            connect_timeout=30,
-            retries={"max_attempts": 10, "mode": "adaptive"},
-        )
-        self._client = session.client("bedrock-runtime", config=client_config)
-        self._model_id = model_id
+        self._bedrock_model_id = model_id
+        self._region = region
+        self._profile = profile
         self._max_tokens = max_tokens
         self._fallback = HeuristicScorer()
 
@@ -204,6 +198,8 @@ class LlmScorer:
             return result
 
     def _score_llm(self, pair: DocumentPair) -> DocumentScore:
+        from shared.llm import LlmRequest, invoke_llm
+
         prompt = _LLM_PROMPT_TEMPLATE.format(
             phase=pair.phase,
             doc_path=pair.relative_path,
@@ -211,13 +207,19 @@ class LlmScorer:
             candidate_content=pair.candidate.content[:15_000],
         )
 
-        response = self._client.converse(
-            modelId=self._model_id,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": self._max_tokens, "temperature": 0.0},
+        body = invoke_llm(
+            LlmRequest(
+                system="",
+                user=prompt,
+                max_tokens=self._max_tokens,
+                temperature=0.0,
+                bedrock_model_id=self._bedrock_model_id,
+                aws_profile=self._profile,
+                aws_region=self._region,
+                timeout_seconds=300,
+            ),
+            component="scorer",
         )
-
-        body = response["output"]["message"]["content"][0]["text"]
         body = body.strip()
         if body.startswith("```"):
             body = re.sub(r"^```\w*\n?", "", body)

@@ -137,6 +137,193 @@ def _setup_rules(
     return rules_dest
 
 
+def _setup_dist_from_rules(
+    output_dir: Path,
+    *,
+    rules_source: str,
+    rules_repo: str,
+    rules_ref: str,
+    rules_local_path: str | None,
+    dist_subpath: str = "dist/kiro/.kiro",
+) -> Path | None:
+    """Extract the Kiro distribution (`dist/kiro/.kiro`) from the SAME rules ref
+    that `_setup_rules` cloned.
+
+    This ties the Kiro skills/tools/agents that get installed into the workspace
+    to the exact same commit as the `aidlc-rules/` tree, preserving A/B provenance.
+
+    Returns the path to the extracted ``.kiro/`` directory, or ``None`` if
+    ``dist_subpath`` does not exist in the rules ref (caller should fall back).
+    """
+    dest_root = output_dir / "kiro-dist"
+    dest_kiro = dest_root / ".kiro"
+
+    if rules_source == "local" and rules_local_path:
+        local_path = Path(rules_local_path)
+        src = local_path / dist_subpath
+        if not src.is_dir():
+            print(
+                f"  [warn] Local rules path {local_path} has no {dist_subpath}; "
+                "cannot derive dist from rules ref"
+            )
+            return None
+        if dest_root.exists():
+            shutil.rmtree(dest_root)
+        dest_root.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src, dest_kiro)
+        print(f"  Extracted {dist_subpath} from local rules path → {dest_kiro}")
+        return dest_kiro
+
+    # Git-based rules_source: sparse-checkout just the dist subtree from the same ref.
+    # We do a separate clone here rather than piggy-backing on _setup_rules, because
+    # _setup_rules removes everything outside `aidlc-rules/`.
+    tmp_repo = dest_root / "_repo"
+    if dest_root.exists():
+        shutil.rmtree(dest_root)
+    dest_root.mkdir(parents=True, exist_ok=True)
+
+    print(
+        f"  Cloning {dist_subpath} from {rules_repo} (ref: {rules_ref}) "
+        "to derive Kiro dist from the same commit as rules..."
+    )
+    # nosec B603, B607 - Sparse-checkout of a trusted AIDLC rules repository
+    # nosemgrep: dangerous-subprocess-use-audit
+    clone_res = subprocess.run(
+        [
+            "git", "clone",
+            "--branch", rules_ref,
+            "--depth", "1",
+            "--filter=blob:none",
+            "--sparse",
+            "--no-checkout",
+            rules_repo,
+            str(tmp_repo),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if clone_res.returncode != 0:
+        print(
+            f"  [warn] Sparse clone for dist failed (returncode={clone_res.returncode}):"
+            f"\n{clone_res.stderr}"
+        )
+        shutil.rmtree(dest_root, ignore_errors=True)
+        return None
+
+    # Configure sparse-checkout and materialize just the subpath.
+    for cmd in (
+        ["git", "-C", str(tmp_repo), "sparse-checkout", "init", "--cone"],
+        ["git", "-C", str(tmp_repo), "sparse-checkout", "set", dist_subpath],
+        ["git", "-C", str(tmp_repo), "checkout", rules_ref],
+    ):
+        # nosec B603, B607 - trusted git commands with validated args
+        # nosemgrep: dangerous-subprocess-use-audit
+        step = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if step.returncode != 0:
+            print(
+                f"  [warn] Command {' '.join(cmd)} failed:\n{step.stderr}"
+            )
+            shutil.rmtree(dest_root, ignore_errors=True)
+            return None
+
+    src = tmp_repo / dist_subpath
+    if not src.is_dir():
+        print(
+            f"  [warn] Rules ref {rules_ref} does not contain {dist_subpath}; "
+            "cannot derive dist from rules ref"
+        )
+        shutil.rmtree(dest_root, ignore_errors=True)
+        return None
+
+    shutil.copytree(src, dest_kiro)
+
+    def _force_remove_readonly(func, path, _exc_info):
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(tmp_repo, onexc=_force_remove_readonly)
+    else:
+        shutil.rmtree(tmp_repo, onerror=_force_remove_readonly)
+
+    print(f"  Extracted {dist_subpath} from {rules_ref} → {dest_kiro}")
+    return dest_kiro
+
+
+def _preflight_aws_credentials(profile: str | None, region: str | None) -> None:
+    """Fail-closed check that AWS credentials work before any billable run.
+
+    Skipped automatically when both the human-analog and scorer components
+    are configured to use a non-Bedrock backend (e.g. ``kiro-cli``); AWS
+    credentials are irrelevant in that case.  Can also be force-skipped by
+    setting ``AIDLC_EVAL_SKIP_AWS_PREFLIGHT=1``.
+    """
+    if os.environ.get("AIDLC_EVAL_SKIP_AWS_PREFLIGHT") == "1":
+        print("  [preflight] AWS sts check skipped (AIDLC_EVAL_SKIP_AWS_PREFLIGHT=1)")
+        return
+
+    # If every component that would call an LLM is on a non-Bedrock backend,
+    # the sts check is not required — the run will not touch AWS.
+    try:
+        # ``shared`` is provided by the packages/shared workspace member.
+        from shared.llm import resolve_backend  # type: ignore
+    except ImportError:
+        resolve_backend = None  # type: ignore[assignment]
+    if resolve_backend is not None:
+        try:
+            human_backend = resolve_backend(component="human")
+            scorer_backend = resolve_backend(component="scorer")
+        except ValueError as exc:
+            print(f"  [preflight] backend config error: {exc}", file=sys.stderr)
+            sys.exit(3)
+        if human_backend != "bedrock" and scorer_backend != "bedrock":
+            print(
+                "  [preflight] AWS sts check skipped: "
+                f"human_backend={human_backend}, scorer_backend={scorer_backend} "
+                "(no Bedrock calls will be made)"
+            )
+            return
+
+    try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError as exc:  # pragma: no cover - boto3 is a hard dep
+        print(f"  [preflight] boto3 not available for AWS preflight: {exc}", file=sys.stderr)
+        sys.exit(3)
+
+    session_kwargs: dict = {}
+    if profile:
+        session_kwargs["profile_name"] = profile
+    session = boto3.Session(**session_kwargs)
+    client_kwargs: dict = {"service_name": "sts"}
+    if region:
+        client_kwargs["region_name"] = region
+    try:
+        sts = session.client(**client_kwargs)
+        ident = sts.get_caller_identity()
+    except (BotoCoreError, ClientError) as exc:
+        print(
+            "  [preflight] aws sts get-caller-identity FAILED: "
+            f"{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+        print(
+            "  [preflight] Refusing to start: Bedrock human-analog calls would fail "
+            "and the evaluator would silently fall back to an approval loop, "
+            "producing no meaningful A/B data.  Fix AWS credentials and retry, or "
+            "set AIDLC_EVAL_SKIP_AWS_PREFLIGHT=1 to override at your own risk. "
+            "Alternatively set AIDLC_EVAL_LLM_BACKEND=codex-cli to run without "
+            "Bedrock at all (uses the Codex CLI's own auth).",
+            file=sys.stderr,
+        )
+        sys.exit(3)
+    print(
+        "  [preflight] AWS sts get-caller-identity OK: "
+        f"account={ident.get('Account')} arn={ident.get('Arn')}"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="run_cli_evaluation",
@@ -271,6 +458,10 @@ def main() -> None:
     # ── Setup AIDLC rules (git clone or local copy) ─────────────────────
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Preflight AWS credentials before any billable run (Bedrock human analog would
+    # otherwise silently fall back to a canned approval loop).
+    _preflight_aws_credentials(args.profile, args.region)
+
     rules_path = _setup_rules(
         output_dir,
         rules_source=rules_source,
@@ -279,15 +470,48 @@ def main() -> None:
         rules_local_path=rules_local_path,
     )
 
-    # Resolve kiro_dist_path — explicit arg, then auto-detect from repo root
+    # Resolve kiro_dist_path.
+    #
+    # Priority:
+    #   1. Explicit ``--kiro-dist`` argument (breaks A/B provenance if the caller
+    #      knows what they're doing).
+    #   2. Derive from the same rules ref via sparse-checkout of ``dist/kiro/.kiro``.
+    #      This keeps the installed Kiro skills/tools/agents byte-identical to the
+    #      rules being compared, which is required for a meaningful A/B experiment.
+    #   3. Fall back to the evaluator repo's own ``dist/kiro/.kiro`` snapshot,
+    #      but WARN loudly because this mixes the rules ref with a different dist
+    #      commit and voids the A/B comparison.
     kiro_dist_path: Path | None = None
     if args.kiro_dist:
         kiro_dist_path = Path(args.kiro_dist).resolve()
+        print(f"  Using explicit --kiro-dist: {kiro_dist_path}")
+        print(
+            "  [warn] --kiro-dist overrides rules-ref provenance; the installed "
+            "Kiro dist may differ from the rules ref being compared."
+        )
     else:
-        # Auto-detect: look for dist/kiro/.kiro two levels up from the evaluator root
-        candidate = REPO_ROOT.parent.parent / "dist" / "kiro" / ".kiro"
-        if candidate.is_dir():
-            kiro_dist_path = candidate
+        kiro_dist_path = _setup_dist_from_rules(
+            output_dir,
+            rules_source=rules_source,
+            rules_repo=rules_repo,
+            rules_ref=rules_ref,
+            rules_local_path=rules_local_path,
+        )
+        if kiro_dist_path is None:
+            # Last-resort auto-detect (v2-evaluator legacy behaviour).
+            candidate = REPO_ROOT.parent.parent / "dist" / "kiro" / ".kiro"
+            if candidate.is_dir():
+                kiro_dist_path = candidate
+                print(
+                    f"  [warn] Rules ref {rules_ref} did not yield a dist/kiro/.kiro; "
+                    f"falling back to evaluator repo dist at {candidate}."
+                )
+                print(
+                    "  [warn] This BREAKS A/B provenance: the workspace will run "
+                    "the evaluator's dist snapshot, not the ref you asked to compare. "
+                    "Fix the rules ref (or supply --kiro-dist explicitly) before "
+                    "trusting the A/B result."
+                )
 
     if kiro_dist_path:
         print(f"  Kiro v2 distribution: {kiro_dist_path}")

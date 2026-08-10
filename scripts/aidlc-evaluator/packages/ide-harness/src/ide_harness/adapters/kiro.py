@@ -10,8 +10,9 @@ directory (e.g. ``dist/kiro/.kiro``), the adapter:
 
 1. Copies the entire ``.kiro/`` tree into the workspace root so Kiro picks up
    skills, agents, hooks, and protocols natively.
-2. Sends ``/skill aidlc-orchestrator\\n<vision content>`` as the initial prompt,
-   activating the v2 orchestrator skill.
+2. Sends ``/aidlc\\n\\n<vision content>`` as the initial prompt, invoking the
+   top-level ``aidlc`` skill in the v2 distribution (there is no ``/skill``
+   subcommand in modern Kiro CLI).
 3. Detects completion by checking for an ``intent-state.md`` file containing
    ``status: complete``.
 
@@ -144,7 +145,7 @@ def _check_intent_state_complete(aidlc_docs_dir: Path | None) -> bool:
 
 
 def _render_v2_prompt(vision_content: str) -> str:
-    return f"/skill aidlc-orchestrator\n\n{vision_content}"
+    return f"/aidlc\n\n{vision_content}"
 
 
 def _find_aidlc_docs(workspace: Path) -> Path | None:
@@ -220,7 +221,7 @@ class KiroAdapter(IDEAdapter):
 
                 vision_content = config.vision_path.read_text(encoding="utf-8")
                 prompt = config.prompt_template or _render_v2_prompt(vision_content)
-                _log("Using v2 agentic execution (/skill aidlc-orchestrator)")
+                _log("Using v2 agentic execution (/aidlc)")
             else:
                 # v1 legacy: inject rules as a steering file
                 steering_dir = workspace / ".kiro" / "steering"

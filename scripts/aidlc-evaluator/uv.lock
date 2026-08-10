@@ -22,6 +22,7 @@ name = "aidlc-cli-harness"
 version = "0.1.0"
 source = { editable = "packages/cli-harness" }
 dependencies = [
+    { name = "aidlc-shared" },
     { name = "pyyaml" },
 ]
 
@@ -32,6 +33,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aidlc-shared", editable = "packages/shared" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
@@ -106,6 +108,7 @@ name = "aidlc-ide-harness"
 version = "0.1.0"
 source = { editable = "packages/ide-harness" }
 dependencies = [
+    { name = "aidlc-shared" },
     { name = "pyyaml" },
 ]
 
@@ -116,6 +119,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aidlc-shared", editable = "packages/shared" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]

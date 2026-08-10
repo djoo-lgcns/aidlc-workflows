@@ -13,8 +13,8 @@ Falls back to "Approve & Continue." if Bedrock is unavailable.
 
 from __future__ import annotations
 
-import json
 import logging
+import os
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -115,12 +115,17 @@ def generate_human_response(
 ) -> str:
     """Generate a contextually appropriate human response to Kiro's turn output.
 
-    Uses the same model configuration as the execution package's simulator agent.
-    Falls back to "Approve & Continue." if Bedrock is unavailable.
-    """
-    try:
-        import boto3
+    Backend selection (see ``shared.llm``):
+      * ``AIDLC_EVAL_HUMAN_BACKEND`` (component override), then
+      * ``AIDLC_EVAL_LLM_BACKEND`` (global), then
+      * default ``bedrock``.
 
+    Falls back to ``"Approve & Continue."`` if the backend fails, unless
+    ``AIDLC_EVAL_STRICT_HUMAN=1`` is set (then re-raises as ``RuntimeError``).
+    """
+    from shared.llm import LlmRequest, invoke_llm
+
+    try:
         vision = vision_path.read_text(encoding="utf-8") if vision_path.is_file() else ""
         tech_env = tech_env_path.read_text(encoding="utf-8") if tech_env_path and tech_env_path.is_file() else ""
 
@@ -140,34 +145,32 @@ def generate_human_response(
         )
 
         # Extract the final assistant response block (lines starting with "> ")
-        # This avoids feeding Kiro's tool output (file writes, shell runs) to the LLM
-        # and focuses it on what Kiro actually said to the human.
+        # so the LLM sees only what Kiro said to the human, not the tool output.
         trimmed_output = _extract_final_response(turn_output)
         user_content = _USER_TEMPLATE.format(turn_output=trimmed_output)
 
-        session_kwargs = {}
-        if aws_profile:
-            session_kwargs["profile_name"] = aws_profile
-        session = boto3.Session(**session_kwargs)
-
-        client_kwargs = {"service_name": "bedrock-runtime"}
-        if aws_region:
-            client_kwargs["region_name"] = aws_region
-        client = session.client(**client_kwargs)
-
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 256,
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": user_content}],
-        })
-
-        response = client.invoke_model(modelId=model_id, body=body)
-        result = json.loads(response["body"].read())
-        text = result["content"][0]["text"].strip()
-        logger.info("Human analog response (%s): %s", model_id, text[:120])
+        text = invoke_llm(
+            LlmRequest(
+                system=system_prompt,
+                user=user_content,
+                max_tokens=256,
+                temperature=0.0,
+                bedrock_model_id=model_id,
+                aws_profile=aws_profile,
+                aws_region=aws_region,
+                timeout_seconds=180,
+            ),
+            component="human",
+        )
+        logger.info("Human analog response: %s", text[:120])
         return text
 
     except Exception as exc:
-        logger.warning("Human analog Bedrock call failed (%s) — falling back to approval", exc)
+        logger.warning("Human analog LLM call failed (%s) — falling back to approval", exc)
+        # Strict mode: refuse to silently degrade into a canned approval loop.
+        # See cli_harness.human_analog for the same guard on the CLI path.
+        if os.environ.get("AIDLC_EVAL_STRICT_HUMAN") == "1":
+            raise RuntimeError(
+                f"Human analog LLM call failed and AIDLC_EVAL_STRICT_HUMAN=1: {exc}"
+            ) from exc
         return "Approve & Continue."

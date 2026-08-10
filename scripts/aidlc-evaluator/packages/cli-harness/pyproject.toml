@@ -5,6 +5,7 @@ description = "CLI-based harness for testing AIDLC workflows via kiro-cli"
 requires-python = ">=3.13"
 dependencies = [
     "pyyaml>=6.0",
+    "aidlc-shared",
 ]
 
 [project.optional-dependencies]
