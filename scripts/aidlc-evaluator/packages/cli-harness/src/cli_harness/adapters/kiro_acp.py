@@ -836,7 +836,12 @@ class KiroACPAdapter(CLIAdapter):
                         client,
                         session_id,
                         next_prompt,
-                        timeout=min(remaining, 900),
+                        # Hard upper bound per turn is 1 h; the idle watchdog
+                        # (default 120 s of silence) inside _run_turn catches
+                        # true hangs long before this.  Long values here only
+                        # affect legitimately busy sub-agent-crew turns
+                        # observed on the v2 baseline.
+                        timeout=min(remaining, 3600),
                     )
 
                     aidlc_docs_dir = _find_aidlc_docs(workspace)
@@ -951,6 +956,7 @@ class KiroACPAdapter(CLIAdapter):
         prompt_text: str,
         *,
         timeout: float,
+        idle_timeout: float = 120.0,
     ) -> tuple[str, list[dict], bool, str | None]:
         """Send ``prompt_text`` as a session/prompt and collect the turn.
 
@@ -964,12 +970,26 @@ class KiroACPAdapter(CLIAdapter):
             ``tool_call`` / ``tool_call_update`` etc.  No separate ``TurnEnd``
             notification is emitted; the request result is the boundary.
 
+        Two-part timeout policy (defensive against sub-agent crew workloads):
+
+          * ``timeout`` — hard upper bound for the whole turn.  A long-running
+            v2 upstream stage (e.g. approval-handoff / practices-discovery
+            spawning a subagent crew) may legitimately need >15 minutes;
+            callers pass a large value (e.g. 3600 s).
+          * ``idle_timeout`` — cap on *silence*.  If we go this long with
+            zero incoming notifications (no chunks, no tool events, no
+            metadata), the agent is likely wedged rather than merely slow.
+            A background watchdog trips the pending request with a synthetic
+            error so we don't block for the full ``timeout``.
+
         Returns ``(agent_text, tool_events, ended_ok, stop_reason)``.
         """
         chunks: list[str] = []
         tool_events: list[dict] = []
+        last_activity = [time.monotonic()]
 
         def handler(msg: dict) -> None:
+            last_activity[0] = time.monotonic()
             method = msg.get("method", "")
             params = msg.get("params", {}) or {}
             update = params.get("update", {}) if isinstance(params, dict) else {}
@@ -996,6 +1016,47 @@ class KiroACPAdapter(CLIAdapter):
 
         client.set_notification_handler(handler)
 
+        # Watchdog: unblocks the pending session/prompt with a synthetic
+        # JSON-RPC error if no notification arrives for ``idle_timeout``
+        # seconds.  This distinguishes a genuinely wedged agent from a slow
+        # but active one — the latter keeps last_activity fresh through
+        # streaming ``agent_thought_chunk`` events.
+        watchdog_stop = threading.Event()
+        watchdog_fired = [False]
+
+        def _watchdog() -> None:
+            while not watchdog_stop.wait(1.0):
+                idle = time.monotonic() - last_activity[0]
+                if idle <= idle_timeout:
+                    continue
+                # Trip pending requests for this client so the main-thread
+                # request() call unblocks immediately.
+                with client._pending_lock:  # type: ignore[attr-defined]
+                    for req_id, q in list(client._pending.items()):  # type: ignore[attr-defined]
+                        q.put({
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "error": {
+                                "code": -32001,
+                                "message": (
+                                    f"idle timeout {idle_timeout:.0f}s "
+                                    f"(actual idle {idle:.0f}s)"
+                                ),
+                            },
+                        })
+                        client._pending.pop(req_id, None)  # type: ignore[attr-defined]
+                watchdog_fired[0] = True
+                _log(
+                    f"[warn] session/prompt idle for {idle:.0f}s (> {idle_timeout:.0f}s) "
+                    "— treating as hang"
+                )
+                return
+
+        watchdog_thread = threading.Thread(
+            target=_watchdog, name="kiro-acp-idle-watchdog", daemon=True,
+        )
+        watchdog_thread.start()
+
         stop_reason: str | None = None
         ended = False
         try:
@@ -1013,7 +1074,13 @@ class KiroACPAdapter(CLIAdapter):
         except ACPProtocolError as exc:
             _log(f"[warn] session/prompt error: {exc}")
             ended = False
+        finally:
+            watchdog_stop.set()
 
         client.set_notification_handler(None)
         text = "".join(chunks)
+        # Surface idle-kill in stop_reason so the caller can distinguish it
+        # from a hard max-timeout.
+        if watchdog_fired[0] and stop_reason is None:
+            stop_reason = "idle_timeout"
         return _strip_ansi(text), tool_events, ended, stop_reason
