@@ -1008,6 +1008,14 @@ class KiroACPAdapter(CLIAdapter):
                 tool_events.append({"kind": update_type, "raw": update})
                 return
 
+            # Kiro streams agent chain-of-thought as ``agent_thought_chunk``
+            # updates several times per second.  They keep last_activity
+            # fresh (which is what the watchdog needs) but carry no user-
+            # actionable signal, so we drop them silently to keep the
+            # evaluator.log readable.
+            if update_type == "agent_thought_chunk":
+                return
+
             # Kiro-specific extensions (commands/available, metadata, mcp/*, etc.)
             if method.startswith("_kiro.dev/"):
                 return
